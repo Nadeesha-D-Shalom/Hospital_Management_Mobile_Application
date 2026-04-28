@@ -1,7 +1,9 @@
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const User = require('../models/user.model');
 const generateToken = require('../utils/generateToken');
 const asyncHandler = require('../utils/asyncHandler');
+const { sendEmail } = require('../utils/email');
 
 exports.registerUser = asyncHandler(async (req, res) => {
   const { name, email, password } = req.body;
@@ -82,4 +84,105 @@ exports.loginUser = asyncHandler(async (req, res) => {
 exports.getMe = asyncHandler(async (req, res) => {
   const user = req.user;
   res.status(200).json(user);
+});
+
+exports.requestPasswordResetOtp = asyncHandler(async (req, res) => {
+  const { email } = req.body;
+
+  if (!email) {
+    return res.status(400).json({ message: 'Email is required' });
+  }
+
+  const user = await User.findOne({ email });
+  if (!user) {
+    return res.status(404).json({ message: 'User not found' });
+  }
+
+  const otp = String(crypto.randomInt(100000, 1000000));
+  const hashedOtp = await bcrypt.hash(otp, 10);
+
+  user.resetPasswordOtpHash = hashedOtp;
+  user.resetPasswordOtpExpiresAt = new Date(Date.now() + 60 * 1000); // 1 minute validity
+  user.resetPasswordOtpVerified = false;
+  await user.save();
+
+  await sendEmail({
+    to: user.email,
+    subject: 'Your password reset OTP',
+    text: `Your OTP is ${otp}. It will expire in 1 minute.`,
+    html: `<p>Your OTP is <b>${otp}</b>. It will expire in <b>1 minute</b>.</p>`,
+  });
+
+  res.status(200).json({
+    message: 'OTP sent to email. OTP is valid for 1 minute.',
+  });
+});
+
+exports.verifyPasswordResetOtp = asyncHandler(async (req, res) => {
+  const { email, otp } = req.body;
+
+  if (!email || !otp) {
+    return res.status(400).json({ message: 'Email and OTP are required' });
+  }
+
+  const user = await User.findOne({ email });
+  if (!user || !user.resetPasswordOtpHash || !user.resetPasswordOtpExpiresAt) {
+    return res.status(400).json({ message: 'No active OTP found. Please request a new OTP.' });
+  }
+
+  if (user.resetPasswordOtpExpiresAt.getTime() < Date.now()) {
+    user.resetPasswordOtpHash = undefined;
+    user.resetPasswordOtpExpiresAt = undefined;
+    user.resetPasswordOtpVerified = false;
+    await user.save();
+    return res.status(400).json({ message: 'OTP expired. Please request a new OTP.' });
+  }
+
+  const isOtpValid = await bcrypt.compare(String(otp), user.resetPasswordOtpHash);
+  if (!isOtpValid) {
+    return res.status(400).json({ message: 'Invalid OTP' });
+  }
+
+  user.resetPasswordOtpVerified = true;
+  await user.save();
+
+  res.status(200).json({ message: 'OTP verified successfully' });
+});
+
+exports.resetPasswordWithOtp = asyncHandler(async (req, res) => {
+  const { email, newPassword, confirmPassword } = req.body;
+
+  if (!email || !newPassword || !confirmPassword) {
+    return res.status(400).json({ message: 'Email, newPassword, and confirmPassword are required' });
+  }
+
+  if (newPassword !== confirmPassword) {
+    return res.status(400).json({ message: 'Passwords do not match' });
+  }
+
+  const user = await User.findOne({ email });
+  if (!user) {
+    return res.status(404).json({ message: 'User not found' });
+  }
+
+  if (!user.resetPasswordOtpVerified || !user.resetPasswordOtpExpiresAt) {
+    return res.status(400).json({ message: 'OTP is not verified. Please verify OTP first.' });
+  }
+
+  if (user.resetPasswordOtpExpiresAt.getTime() < Date.now()) {
+    user.resetPasswordOtpHash = undefined;
+    user.resetPasswordOtpExpiresAt = undefined;
+    user.resetPasswordOtpVerified = false;
+    await user.save();
+    return res.status(400).json({ message: 'OTP expired. Please request and verify a new OTP.' });
+  }
+
+  const salt = await bcrypt.genSalt(10);
+  user.password = await bcrypt.hash(newPassword, salt);
+  user.resetPasswordOtpHash = undefined;
+  user.resetPasswordOtpExpiresAt = undefined;
+  user.resetPasswordOtpVerified = false;
+  await user.save();
+
+  res.status(200).json({ message: 'Password reset successful. You can now log in with the new password.' });
 });

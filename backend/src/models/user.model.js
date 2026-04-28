@@ -28,6 +28,16 @@ const userSchema = new mongoose.Schema(
         },
         profileImage: {
             type: String
+        },
+        resetPasswordOtpHash: {
+            type: String
+        },
+        resetPasswordOtpExpiresAt: {
+            type: Date
+        },
+        resetPasswordOtpVerified: {
+            type: Boolean,
+            default: false
         }
     },
     { timestamps: true }
