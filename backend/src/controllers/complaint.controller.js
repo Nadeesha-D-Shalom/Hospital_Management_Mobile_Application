@@ -41,10 +41,15 @@ exports.updateComplaint = asyncHandler(async (req, res) => {
 
 exports.getComplaints = asyncHandler(async (req, res) => {
   // Patients should only see complaints after admin has replied.
+  // We key off adminReply presence (not only status), because UI may set intermediate statuses.
   const filter =
     req.user.role === 'admin'
       ? {}
-      : { userId: req.user._id, status: 'resolved', adminReply: { $exists: true, $ne: '' } };
+      : {
+          userId: req.user._id,
+          adminReply: { $exists: true, $ne: '' },
+        };
+
   const complaints = await Complaint.find(filter).populate('userId', '-password');
   res.status(200).json(complaints);
 });
@@ -60,7 +65,10 @@ exports.getComplaintById = asyncHandler(async (req, res) => {
     return res.status(403).json({ message: 'Forbidden' });
   }
 
-  if (req.user.role !== 'admin' && complaint.status !== 'resolved') {
+  if (
+    req.user.role !== 'admin' &&
+    (!complaint.adminReply || String(complaint.adminReply).trim().length === 0)
+  ) {
     return res.status(404).json({ message: 'Complaint not found' });
   }
 

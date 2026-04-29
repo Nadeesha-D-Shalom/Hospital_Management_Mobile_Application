@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { View, FlatList, StyleSheet, Alert, TouchableOpacity, Text } from 'react-native';
 import { getAppointmentsApi, updateAppointmentStatusApi } from '../../api/appointmentApi';
 import AppointmentCard from '../../components/AppointmentCard';
@@ -7,6 +7,7 @@ import EmptyState from '../../components/EmptyState';
 import ScreenHeader from '../../components/ScreenHeader';
 import { AuthContext } from '../../context/AuthContext';
 import { COLORS, FONTS, RADIUS, SHADOW } from '../../theme';
+import { useFocusEffect } from '@react-navigation/native';
 
 const AppointmentListScreen = ({ navigation }) => {
   const [appointments, setAppointments] = useState([]);
@@ -16,6 +17,7 @@ const AppointmentListScreen = ({ navigation }) => {
   const isAdmin = userInfo?.role === 'admin';
 
   useEffect(() => {
+    // Initial load
     (async () => {
       try {
         const res = await getAppointmentsApi();
@@ -24,6 +26,25 @@ const AppointmentListScreen = ({ navigation }) => {
       finally { setLoading(false); }
     })();
   }, []);
+
+  const refreshAppointments = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await getAppointmentsApi();
+      setAppointments(res.data);
+    } catch (e) {
+      console.error(e);
+      Alert.alert('Error', e?.response?.data?.message || 'Failed to load appointments');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshAppointments();
+    }, [refreshAppointments])
+  );
 
   const handleStatusChange = async (id, nextStatus) => {
     setActionLoadingId(id);

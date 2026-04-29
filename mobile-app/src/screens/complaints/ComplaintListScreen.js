@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { View, FlatList, StyleSheet, Alert, TouchableOpacity, Text } from 'react-native';
 import { getComplaintsApi, updateComplaintStatusApi } from '../../api/complaintApi';
 import ComplaintCard from '../../components/ComplaintCard';
@@ -8,6 +8,7 @@ import ScreenHeader from '../../components/ScreenHeader';
 import CustomInput from '../../components/CustomInput';
 import { AuthContext } from '../../context/AuthContext';
 import { COLORS, FONTS, RADIUS } from '../../theme';
+import { useFocusEffect } from '@react-navigation/native';
 
 const ComplaintListScreen = ({ navigation }) => {
   const [complaints,      setComplaints]      = useState([]);
@@ -26,6 +27,25 @@ const ComplaintListScreen = ({ navigation }) => {
       finally { setLoading(false); }
     })();
   }, []);
+
+  const refreshComplaints = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await getComplaintsApi();
+      setComplaints(res.data);
+    } catch (e) {
+      console.error(e);
+      Alert.alert('Error', e?.response?.data?.message || 'Failed to load complaints');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshComplaints();
+    }, [refreshComplaints])
+  );
 
   const handleStatusUpdate = async (id, nextStatus) => {
     setActionLoadingId(id);

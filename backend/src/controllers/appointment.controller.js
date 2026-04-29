@@ -71,8 +71,12 @@ exports.createAppointment = asyncHandler(async (req, res) => {
 });
 
 exports.getAppointments = asyncHandler(async (req, res) => {
-  // Patients should only see appointments after admin approval.
-  const filter = req.user.role === 'admin' ? {} : { userId: req.user._id, status: 'approved' };
+  // Patients should only see appointments after admin has made a decision.
+  // (pending remains hidden, but both approved and rejected/cancelled are visible)
+  const filter =
+    req.user.role === 'admin'
+      ? {}
+      : { userId: req.user._id, status: { $in: ['approved', 'rejected', 'cancelled'] } };
   const appointments = await Appointment.find(filter)
     .populate('doctorId')
     .populate('serviceId')
@@ -94,7 +98,7 @@ exports.getAppointmentById = asyncHandler(async (req, res) => {
     return res.status(403).json({ message: 'Forbidden' });
   }
 
-  if (req.user.role !== 'admin' && appointment.status !== 'approved') {
+  if (req.user.role !== 'admin' && appointment.status === 'pending') {
     return res.status(404).json({ message: 'Appointment not found' });
   }
 
@@ -212,7 +216,6 @@ exports.updateAppointmentStatus = asyncHandler(async (req, res) => {
       const service = populated?.serviceId;
 
       const amountToPay = service?.price ?? 0;
-      const paymentMethodText = populated?.paymentMethod === 'card' ? 'Card (pay at hospital)' : 'Cash';
 
       if (user?.email) {
         const dateStr = populated.appointmentDate
@@ -237,7 +240,8 @@ exports.updateAppointmentStatus = asyncHandler(async (req, res) => {
             `Service: ${service?.serviceName || 'N/A'}\n` +
             `Date & Time: ${dateStr} at ${timeStr}\n` +
             `Amount to pay: LKR ${amountToPay}\n` +
-            `Payment method: ${paymentMethodText}\n\n` +
+            `Payment: Please make payment when you visit the hospital.\n` +
+            `Card facility will be available soon.\n\n` +
             `Thank you,\nOlympus Lanka Hospital`,
           html:
             `<p>Hello <b>${user.name}</b>,</p>` +
@@ -254,12 +258,10 @@ exports.updateAppointmentStatus = asyncHandler(async (req, res) => {
             `<li><b>Service:</b> ${service?.serviceName || 'N/A'}</li>` +
             `<li><b>Date & Time:</b> ${dateStr} at ${timeStr}</li>` +
             `<li><b>Amount to pay:</b> LKR ${amountToPay}</li>` +
-            `<li><b>Payment method:</b> ${paymentMethodText}</li>` +
+            `<li><b>Payment:</b> Please make payment when you visit the hospital.</li>` +
+            `<li><b>Card facility:</b> Available soon.</li>` +
             `</ul>` +
-            `<p>Thank you,<br/>Olympus Lanka Hospital</p>` +
-            (populated?.paymentMethod === 'card'
-              ? `<p style="color:#b45309"><b>Note:</b> Card payment facility will be available soon. Please make payment when you visit the hospital.</p>`
-              : ''),
+            `<p>Thank you,<br/>Olympus Lanka Hospital</p>`
         });
       }
     } catch (e) {
