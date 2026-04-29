@@ -12,33 +12,130 @@ exports.registerUser = asyncHandler(async (req, res) => {
     return res.status(400).json({ message: 'Name, email, and password are required' });
   }
 
+  // Validate email format
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    return res.status(400).json({ message: 'Please enter a valid email address' });
+  }
+
   const existingUser = await User.findOne({ email });
-  if (existingUser) {
+  if (existingUser && existingUser.emailVerified) {
     return res.status(400).json({ message: 'Email is already registered' });
   }
 
-  const salt = await bcrypt.genSalt(10);
-  const hashedPassword = await bcrypt.hash(password, salt);
+  // Generate and send email verification OTP
+  const otp = String(crypto.randomInt(100000, 1000000));
+  const hashedOtp = await bcrypt.hash(otp, 10);
 
-  let role = 'patient';
-  if (req.body.role && ['patient', 'doctor', 'admin'].includes(req.body.role)) {
-    role = req.body.role;
+  let user = existingUser;
+  if (!user) {
+    // Create unverified user
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    let role = 'patient';
+    if (req.body.role && ['patient', 'doctor', 'admin'].includes(req.body.role)) {
+      role = req.body.role;
+    } else {
+      const adminExists = await User.exists({ role: 'admin', emailVerified: true });
+      if (!adminExists) role = 'admin';
+    }
+
+    user = await User.create({
+      name,
+      email,
+      password: hashedPassword,
+      role,
+      emailVerified: false,
+      emailVerificationOtpHash: hashedOtp,
+      emailVerificationOtpExpiresAt: new Date(Date.now() + 2 * 60 * 1000),
+    });
   } else {
-    // Bootstrap for academic demos: if no admin exists, create the first account as admin.
-    const adminExists = await User.exists({ role: 'admin' });
-    if (!adminExists) role = 'admin';
+    // Update existing unverified user
+    user.name = name;
+    user.password = await bcrypt.hash(password, 10);
+    user.emailVerificationOtpHash = hashedOtp;
+    user.emailVerificationOtpExpiresAt = new Date(Date.now() + 2 * 60 * 1000);
+    await user.save();
   }
 
-  const user = await User.create({
-    name,
-    email,
-    password: hashedPassword,
-    role,
+  // Send OTP email
+  await sendEmail({
+    to: email,
+    subject: 'Email Verification OTP - Hospital App',
+    text: `Dear ${name},
+
+Thank you for registering with us.
+
+Your Email Verification OTP is: ${otp}
+
+This OTP is valid for 2 minutes. Please do not share this code with anyone.
+
+Regards,  
+Hospital App Team`,
+    
+    html: `
+      <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+        <h2 style="color: #2c3e50;">Email Verification</h2>
+        
+        <p>Dear ${name},</p>
+        
+        <p>Thank you for registering with us.</p>
+        
+        <p>
+          Your Email Verification OTP is:
+          <strong style="font-size: 18px; color: #e74c3c;">${otp}</strong>
+        </p>
+        
+        <p>This OTP is valid for <strong>2 minutes</strong>. Please do not share this code with anyone.</p>
+        
+        <br/>
+        
+        <p>Regards,<br/><strong>Hospital App Team</strong></p>
+      </div>
+    `,
   });
+
+  res.status(200).json({
+    message: 'OTP sent to your email. Please verify your email to complete registration.',
+    email,
+    requiresEmailVerification: true,
+  });
+});
+
+exports.verifyEmailOtp = asyncHandler(async (req, res) => {
+  const { email, otp } = req.body;
+
+  if (!email || !otp) {
+    return res.status(400).json({ message: 'Email and OTP are required' });
+  }
+
+  const user = await User.findOne({ email });
+  if (!user || !user.emailVerificationOtpHash || !user.emailVerificationOtpExpiresAt) {
+    return res.status(400).json({ message: 'No active OTP found. Please request a new registration.' });
+  }
+
+  if (user.emailVerificationOtpExpiresAt.getTime() < Date.now()) {
+    user.emailVerificationOtpHash = undefined;
+    user.emailVerificationOtpExpiresAt = undefined;
+    await user.save();
+    return res.status(400).json({ message: 'OTP expired. Please register again.' });
+  }
+
+  const isOtpValid = await bcrypt.compare(String(otp), user.emailVerificationOtpHash);
+  if (!isOtpValid) {
+    return res.status(400).json({ message: 'Invalid OTP' });
+  }
+
+  user.emailVerified = true;
+  user.emailVerificationOtpHash = undefined;
+  user.emailVerificationOtpExpiresAt = undefined;
+  await user.save();
 
   const token = generateToken(user._id);
 
-  res.status(201).json({
+  res.status(200).json({
+    message: 'Email verified successfully. Account created.',
     token,
     _id: user._id,
     name: user.name,
@@ -60,6 +157,10 @@ exports.loginUser = asyncHandler(async (req, res) => {
   const user = await User.findOne({ email });
   if (!user) {
     return res.status(401).json({ message: 'Invalid credentials' });
+  }
+
+  if (!user.emailVerified) {
+    return res.status(403).json({ message: 'Please verify your email before logging in' });
   }
 
   const isMatch = await bcrypt.compare(password, user.password);
@@ -102,7 +203,7 @@ exports.requestPasswordResetOtp = asyncHandler(async (req, res) => {
   const hashedOtp = await bcrypt.hash(otp, 10);
 
   user.resetPasswordOtpHash = hashedOtp;
-  user.resetPasswordOtpExpiresAt = new Date(Date.now() + 2 * 60 * 1000); // 1 minute validity
+  user.resetPasswordOtpExpiresAt = new Date(Date.now() + 2 * 60 * 1000);
   user.resetPasswordOtpVerified = false;
   await user.save();
 
@@ -116,7 +217,7 @@ We received a request to reset your password.
 
 Your One-Time Password (OTP) is: ${otp}
 
-This OTP is valid for 1 minute. Please do not share this code with anyone.
+This OTP is valid for 2 minutes. Please do not share this code with anyone.
 
 If you did not request this, please ignore this email.
 
@@ -136,7 +237,7 @@ Hospital App Team`,
         <strong style="font-size: 18px; color: #e74c3c;">${otp}</strong>
       </p>
       
-      <p>This OTP is valid for <strong>2 minute</strong>. Please do not share this code with anyone.</p>
+      <p>This OTP is valid for <strong>2 minutes</strong>. Please do not share this code with anyone.</p>
       
       <p>If you did not request this, please ignore this email.</p>
       
@@ -148,7 +249,7 @@ Hospital App Team`,
 });
 
   res.status(200).json({
-    message: 'OTP sent to email. OTP is valid for 1 minute.',
+    message: 'OTP sent to email. OTP is valid for 2 minutes.',
   });
 });
 

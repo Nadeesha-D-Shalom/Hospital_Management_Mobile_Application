@@ -29,6 +29,16 @@ const userSchema = new mongoose.Schema(
         profileImage: {
             type: String
         },
+        emailVerified: {
+            type: Boolean,
+            default: false
+        },
+        emailVerificationOtpHash: {
+            type: String
+        },
+        emailVerificationOtpExpiresAt: {
+            type: Date
+        },
         resetPasswordOtpHash: {
             type: String
         },

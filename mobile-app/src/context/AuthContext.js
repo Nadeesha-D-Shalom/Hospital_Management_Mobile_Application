@@ -1,6 +1,7 @@
 import React, { createContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from '../api/axios';
+import { verifyEmailOtpApi } from '../api/authApi';
 
 export const AuthContext = createContext();
 
@@ -25,11 +26,21 @@ export const AuthProvider = ({ children }) => {
   const register = async (name, email, password) => {
     try {
       const response = await axios.post('/auth/register', { name, email, password });
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  };
+
+  const verifyEmailOtp = async (email, otp) => {
+    try {
+      const response = await verifyEmailOtpApi(email, otp);
       const { token, ...user } = response.data;
       setUserToken(token);
       setUserInfo(user);
       await AsyncStorage.setItem('userToken', token);
       await AsyncStorage.setItem('userInfo', JSON.stringify(user));
+      return response.data;
     } catch (error) {
       throw error;
     }
@@ -65,6 +76,7 @@ export const AuthProvider = ({ children }) => {
     <AuthContext.Provider value={{
       login,
       register,
+      verifyEmailOtp,
       logout,
       userToken,
       userInfo,

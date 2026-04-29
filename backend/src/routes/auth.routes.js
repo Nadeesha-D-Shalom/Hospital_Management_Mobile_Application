@@ -3,6 +3,7 @@ const {
   registerUser,
   loginUser,
   getMe,
+  verifyEmailOtp,
   requestPasswordResetOtp,
   verifyPasswordResetOtp,
   resetPasswordWithOtp,
@@ -12,6 +13,7 @@ const authMiddleware = require('../middleware/auth.middleware');
 const router = express.Router();
 
 router.post('/register', registerUser);
+router.post('/verify-email-otp', verifyEmailOtp);
 router.post('/login', loginUser);
 router.post('/forgot-password/request-otp', requestPasswordResetOtp);
 router.post('/forgot-password/verify-otp', verifyPasswordResetOtp);

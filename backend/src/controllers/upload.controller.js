@@ -31,3 +31,19 @@ exports.uploadDoctorImage = asyncHandler(async (req, res) => {
   res.status(200).json({ imageUrl, doctor });
 });
 
+exports.uploadAppointmentReportFile = asyncHandler(async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ message: 'reportFile is required' });
+  }
+
+  const origin = getOriginFromBaseUrl();
+  const fileUrl = `${origin}/uploads/appointment-reports/${req.file.filename}`;
+  const fileType = req.file.mimetype === 'application/pdf' ? 'pdf' : 'image';
+
+  res.status(200).json({
+    fileUrl,
+    fileName: req.file.originalname,
+    fileType,
+  });
+});
+
