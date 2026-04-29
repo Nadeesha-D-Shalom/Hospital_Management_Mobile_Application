@@ -86,7 +86,7 @@ const PaymentFormScreen = ({ route, navigation }) => {
               style={[styles.methodItem, paymentMethod === m.key && styles.methodItemSelected]}
               onPress={() => setPaymentMethod(m.key)}
               activeOpacity={0.8}
-              disabled={Boolean(initialPaymentMethod) || loading}
+              disabled={loading}
             >
               <Text style={styles.methodEmoji}>{m.icon}</Text>
               <Text style={[styles.methodLabel, paymentMethod === m.key && styles.methodLabelSelected]}>
