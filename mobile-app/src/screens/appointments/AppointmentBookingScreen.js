@@ -43,6 +43,7 @@ const AppointmentBookingScreen = ({ route, navigation }) => {
   const [appointmentDate, setAppointmentDate] = useState(getTodayDate());
   const [appointmentTime, setAppointmentTime] = useState('');
   const [notes, setNotes] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('cash'); // cash | card
   const [loading, setLoading] = useState(false);
 
   const availableDates = getUpcomingDates(14);
@@ -72,7 +73,14 @@ const AppointmentBookingScreen = ({ route, navigation }) => {
 
     setLoading(true);
     try {
-      await createAppointmentApi({ doctorId: doctor._id, serviceId: selectedServiceId, appointmentDate, appointmentTime, notes });
+      await createAppointmentApi({
+        doctorId: doctor._id,
+        serviceId: selectedServiceId,
+        appointmentDate,
+        appointmentTime,
+        notes,
+        paymentMethod,
+      });
       Alert.alert('Appointment Booked', 'Your appointment has been successfully scheduled.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
     } catch (error) {
       Alert.alert('Booking Failed', error.response?.data?.message || 'Please try again.');
@@ -176,6 +184,40 @@ const AppointmentBookingScreen = ({ route, navigation }) => {
         <View style={styles.formCard}>
           <CustomInput label="Notes (optional)" value={notes} onChangeText={setNotes} placeholder="Any special instructions..." multiline numberOfLines={3} />
         </View>
+
+        {/* Payment method selection (payment happens after admin approval) */}
+        <Text style={styles.sectionLabel}>SELECT PAYMENT METHOD</Text>
+        <View style={styles.methodsCard}>
+          <TouchableOpacity
+            style={[styles.methodItem, paymentMethod === 'cash' && styles.methodItemSelected]}
+            onPress={() => setPaymentMethod('cash')}
+            activeOpacity={0.85}
+          >
+            <Text style={[styles.methodTitle, paymentMethod === 'cash' && styles.methodTitleSelected]}>Cash Payment</Text>
+            <View style={[styles.radio, paymentMethod === 'cash' && styles.radioSelected]}>
+              {paymentMethod === 'cash' ? <View style={styles.radioDot} /> : null}
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.methodItem, paymentMethod === 'card' && styles.methodItemSelected]}
+            onPress={() => setPaymentMethod('card')}
+            activeOpacity={0.85}
+          >
+            <Text style={[styles.methodTitle, paymentMethod === 'card' && styles.methodTitleSelected]}>Card Payment</Text>
+            <View style={[styles.radio, paymentMethod === 'card' && styles.radioSelected]}>
+              {paymentMethod === 'card' ? <View style={styles.radioDot} /> : null}
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        {paymentMethod === 'card' ? (
+          <View style={styles.cardInfoBox}>
+            <Text style={styles.cardInfoText}>
+              Card payment facility will be available soon. Please make payment when you visit the hospital.
+            </Text>
+          </View>
+        ) : null}
 
         <CustomButton title="Confirm Booking" onPress={handleBook} style={styles.bookBtn} />
       </ScrollView>
@@ -284,6 +326,66 @@ const styles = StyleSheet.create({
     padding: 16, marginBottom: 16, ...SHADOW.card,
   },
   bookBtn: { marginTop: 8 },
+
+  methodsCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.lg,
+    overflow: 'hidden',
+    marginBottom: 10,
+    ...SHADOW.card,
+  },
+  methodItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.divider,
+  },
+  methodItemSelected: {
+    backgroundColor: COLORS.tealFaint,
+  },
+  methodTitle: {
+    fontSize: 14,
+    fontWeight: FONTS.semibold,
+    color: COLORS.textSecondary,
+  },
+  methodTitleSelected: {
+    color: COLORS.tealStrong,
+  },
+  radio: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: COLORS.tealPale,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioSelected: {
+    borderColor: COLORS.tealStrong,
+  },
+  radioDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: COLORS.tealStrong,
+  },
+
+  cardInfoBox: {
+    backgroundColor: COLORS.tealFaint,
+    borderRadius: RADIUS.lg,
+    padding: 12,
+    marginBottom: 14,
+    ...SHADOW.card,
+  },
+  cardInfoText: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: COLORS.tealStrong,
+    fontWeight: FONTS.medium,
+  },
 });
 
 export default AppointmentBookingScreen;

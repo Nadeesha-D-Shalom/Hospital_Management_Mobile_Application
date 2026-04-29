@@ -15,12 +15,20 @@ const PAYMENT_METHODS = [
 ];
 
 const PaymentFormScreen = ({ route, navigation }) => {
-  const { appointmentId } = route.params;
-  const [amount, setAmount] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState('card');
+  const { appointmentId, amount: initialAmount, paymentMethod: initialPaymentMethod } = route.params;
+  const [amount, setAmount] = useState(initialAmount !== undefined && initialAmount !== null ? String(initialAmount) : '');
+  const [paymentMethod, setPaymentMethod] = useState(initialPaymentMethod || 'cash');
   const [loading, setLoading] = useState(false);
 
   const handlePay = async () => {
+    if (paymentMethod === 'card') {
+      Alert.alert(
+        'Card payment not available',
+        'Card payment facility will be available soon. Please make payment when you visit the hospital.'
+      );
+      return;
+    }
+
     const parsedAmount = Number(amount);
     if (Number.isNaN(parsedAmount) || parsedAmount <= 0) {
       Alert.alert('Invalid Amount', 'Please enter a valid positive amount.');
@@ -78,6 +86,7 @@ const PaymentFormScreen = ({ route, navigation }) => {
               style={[styles.methodItem, paymentMethod === m.key && styles.methodItemSelected]}
               onPress={() => setPaymentMethod(m.key)}
               activeOpacity={0.8}
+              disabled={Boolean(initialPaymentMethod) || loading}
             >
               <Text style={styles.methodEmoji}>{m.icon}</Text>
               <Text style={[styles.methodLabel, paymentMethod === m.key && styles.methodLabelSelected]}>
@@ -90,7 +99,20 @@ const PaymentFormScreen = ({ route, navigation }) => {
           ))}
         </View>
 
-        <CustomButton title={`Pay with ${paymentMethod === 'card' ? 'Card' : 'Cash'}`} onPress={handlePay} style={styles.payBtn} />
+        {paymentMethod === 'card' ? (
+          <View style={styles.cardInfoBox}>
+            <Text style={styles.cardInfoText}>
+              Card payment facility will be available soon. Please make payment when you visit the hospital.
+            </Text>
+          </View>
+        ) : null}
+
+        <CustomButton
+          title={`Pay with ${paymentMethod === 'card' ? 'Card' : 'Cash'}`}
+          onPress={handlePay}
+          style={styles.payBtn}
+          disabled={loading || paymentMethod === 'card'}
+        />
       </ScrollView>
     </View>
   );
@@ -134,6 +156,14 @@ const styles = StyleSheet.create({
   radioSelected: { borderColor: COLORS.tealStrong },
   radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: COLORS.tealStrong },
   payBtn: { marginTop: 4 },
+  cardInfoBox: {
+    backgroundColor: COLORS.tealFaint,
+    borderRadius: RADIUS.lg,
+    padding: 12,
+    marginBottom: 14,
+    ...SHADOW.card,
+  },
+  cardInfoText: { fontSize: 12, lineHeight: 18, color: COLORS.tealStrong, fontWeight: FONTS.medium },
 });
 
 export default PaymentFormScreen;

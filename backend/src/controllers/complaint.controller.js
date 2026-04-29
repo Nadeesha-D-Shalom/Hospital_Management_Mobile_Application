@@ -40,7 +40,11 @@ exports.updateComplaint = asyncHandler(async (req, res) => {
 });
 
 exports.getComplaints = asyncHandler(async (req, res) => {
-  const filter = req.user.role === 'admin' ? {} : { userId: req.user._id };
+  // Patients should only see complaints after admin has replied.
+  const filter =
+    req.user.role === 'admin'
+      ? {}
+      : { userId: req.user._id, status: 'resolved', adminReply: { $exists: true, $ne: '' } };
   const complaints = await Complaint.find(filter).populate('userId', '-password');
   res.status(200).json(complaints);
 });
@@ -54,6 +58,10 @@ exports.getComplaintById = asyncHandler(async (req, res) => {
 
   if (req.user.role !== 'admin' && complaint.userId._id.toString() !== req.user._id.toString()) {
     return res.status(403).json({ message: 'Forbidden' });
+  }
+
+  if (req.user.role !== 'admin' && complaint.status !== 'resolved') {
+    return res.status(404).json({ message: 'Complaint not found' });
   }
 
   res.status(200).json(complaint);
@@ -71,6 +79,12 @@ exports.updateComplaintStatus = asyncHandler(async (req, res) => {
   const allowed = ['open', 'in_progress', 'resolved'];
   if (status && !allowed.includes(status)) {
     return res.status(400).json({ message: 'Invalid status' });
+  }
+
+  if (status === 'resolved') {
+    if (adminReply === undefined || String(adminReply).trim().length === 0) {
+      return res.status(400).json({ message: 'adminReply is required when resolving a complaint' });
+    }
   }
 
   complaint.status = status || complaint.status;
