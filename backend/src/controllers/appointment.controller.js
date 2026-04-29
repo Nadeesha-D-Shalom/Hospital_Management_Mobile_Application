@@ -76,7 +76,7 @@ exports.getAppointments = asyncHandler(async (req, res) => {
   const filter =
     req.user.role === 'admin'
       ? {}
-      : { userId: req.user._id, status: { $in: ['approved', 'rejected', 'cancelled'] } };
+      : { userId: req.user._id, status: { $ne: 'pending' } };
   const appointments = await Appointment.find(filter)
     .populate('doctorId')
     .populate('serviceId')
@@ -218,6 +218,7 @@ exports.updateAppointmentStatus = asyncHandler(async (req, res) => {
       const amountToPay = service?.price ?? 0;
 
       if (user?.email) {
+        const chosenPaymentMethod = populated?.paymentMethod === 'card' ? 'card' : 'cash';
         const dateStr = populated.appointmentDate
           ? new Date(populated.appointmentDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })
           : '';
@@ -240,8 +241,7 @@ exports.updateAppointmentStatus = asyncHandler(async (req, res) => {
             `Service: ${service?.serviceName || 'N/A'}\n` +
             `Date & Time: ${dateStr} at ${timeStr}\n` +
             `Amount to pay: LKR ${amountToPay}\n` +
-            `Payment: Please make payment when you visit the hospital.\n` +
-            `Card facility will be available soon.\n\n` +
+            `Payment method: ${chosenPaymentMethod === 'card' ? 'Card (facility available soon — pay at hospital)' : 'Cash'}\n\n` +
             `Thank you,\nOlympus Lanka Hospital`,
           html:
             `<p>Hello <b>${user.name}</b>,</p>` +
@@ -258,8 +258,7 @@ exports.updateAppointmentStatus = asyncHandler(async (req, res) => {
             `<li><b>Service:</b> ${service?.serviceName || 'N/A'}</li>` +
             `<li><b>Date & Time:</b> ${dateStr} at ${timeStr}</li>` +
             `<li><b>Amount to pay:</b> LKR ${amountToPay}</li>` +
-            `<li><b>Payment:</b> Please make payment when you visit the hospital.</li>` +
-            `<li><b>Card facility:</b> Available soon.</li>` +
+            `<li><b>Payment method:</b> ${chosenPaymentMethod === 'card' ? 'Card (facility available soon — pay at hospital)' : 'Cash'}</li>` +
             `</ul>` +
             `<p>Thank you,<br/>Olympus Lanka Hospital</p>`
         });

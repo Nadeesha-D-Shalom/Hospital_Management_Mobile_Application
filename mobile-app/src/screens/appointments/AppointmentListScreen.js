@@ -7,7 +7,7 @@ import EmptyState from '../../components/EmptyState';
 import ScreenHeader from '../../components/ScreenHeader';
 import { AuthContext } from '../../context/AuthContext';
 import { COLORS, FONTS, RADIUS, SHADOW } from '../../theme';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 
 const AppointmentListScreen = ({ navigation }) => {
   const [appointments, setAppointments] = useState([]);
@@ -15,6 +15,7 @@ const AppointmentListScreen = ({ navigation }) => {
   const [actionLoadingId, setActionLoadingId] = useState(null);
   const { userInfo } = useContext(AuthContext);
   const isAdmin = userInfo?.role === 'admin';
+  const isFocused = useIsFocused();
 
   useEffect(() => {
     // Initial load
@@ -45,6 +46,17 @@ const AppointmentListScreen = ({ navigation }) => {
       refreshAppointments();
     }, [refreshAppointments])
   );
+
+  // Polling so patient sees updates even if they keep this tab open
+  // while admin approves/rejects in the background.
+  useEffect(() => {
+    if (!isFocused) return undefined;
+    const intervalId = setInterval(() => {
+      refreshAppointments();
+    }, 15000); // 15 seconds
+
+    return () => clearInterval(intervalId);
+  }, [isFocused, refreshAppointments]);
 
   const handleStatusChange = async (id, nextStatus) => {
     setActionLoadingId(id);

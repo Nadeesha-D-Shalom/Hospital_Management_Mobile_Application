@@ -8,7 +8,7 @@ import ScreenHeader from '../../components/ScreenHeader';
 import CustomInput from '../../components/CustomInput';
 import { AuthContext } from '../../context/AuthContext';
 import { COLORS, FONTS, RADIUS } from '../../theme';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 
 const ComplaintListScreen = ({ navigation }) => {
   const [complaints,      setComplaints]      = useState([]);
@@ -17,6 +17,7 @@ const ComplaintListScreen = ({ navigation }) => {
   const [actionLoadingId, setActionLoadingId] = useState(null);
   const { userInfo } = useContext(AuthContext);
   const isAdmin = userInfo?.role === 'admin';
+  const isFocused = useIsFocused();
 
   useEffect(() => {
     (async () => {
@@ -46,6 +47,16 @@ const ComplaintListScreen = ({ navigation }) => {
       refreshComplaints();
     }, [refreshComplaints])
   );
+
+  // Polling so patients see admin replies even if the screen stays open.
+  useEffect(() => {
+    if (!isFocused) return undefined;
+    const intervalId = setInterval(() => {
+      refreshComplaints();
+    }, 15000);
+
+    return () => clearInterval(intervalId);
+  }, [isFocused, refreshComplaints]);
 
   const handleStatusUpdate = async (id, nextStatus) => {
     setActionLoadingId(id);

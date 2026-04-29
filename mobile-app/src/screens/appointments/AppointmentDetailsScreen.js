@@ -104,25 +104,35 @@ const AppointmentDetailsScreen = ({ route, navigation }) => {
         {isPatient && appointment.status === 'approved' ? (
           <View style={styles.paymentBanner}>
             <View style={{ flex: 1 }}>
-              <View>
-                <Text style={styles.paymentBannerTitle}>Payment Required</Text>
-                <Text style={styles.paymentBannerSub}>Your appointment has been approved</Text>
-                {appointment.serviceId?.price !== undefined ? (
+              {appointment.paymentMethod === 'card' ? (
+                <View>
+                  <Text style={styles.paymentBannerTitle}>Card Payment Coming Soon</Text>
                   <Text style={styles.paymentBannerSub}>
-                    Amount to pay: LKR {appointment.serviceId.price}
+                    Card payment facility will be available soon. Please make payment when you visit the hospital.
                   </Text>
-                ) : null}
-              </View>
-              <CustomButton
-                title="Pay Now"
-                onPress={() =>
-                  navigation.navigate('PaymentForm', {
-                    appointmentId: appointment._id,
-                    amount: appointment.serviceId?.price,
-                  })
-                }
-                style={styles.payBtn}
-              />
+                </View>
+              ) : (
+                <>
+                  <View>
+                    <Text style={styles.paymentBannerTitle}>Payment Required</Text>
+                    <Text style={styles.paymentBannerSub}>Your appointment has been approved</Text>
+                    {appointment.serviceId?.price !== undefined ? (
+                      <Text style={styles.paymentBannerSub}>Amount to pay: LKR {appointment.serviceId.price}</Text>
+                    ) : null}
+                  </View>
+                  <CustomButton
+                    title="Pay Now"
+                    onPress={() =>
+                      navigation.navigate('PaymentForm', {
+                        appointmentId: appointment._id,
+                        amount: appointment.serviceId?.price,
+                        paymentMethod: 'cash',
+                      })
+                    }
+                    style={styles.payBtn}
+                  />
+                </>
+              )}
             </View>
           </View>
         ) : null}
