@@ -23,18 +23,18 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const register = async (name, email, password) => {
+  const register = async (name, email) => {
     try {
-      const response = await axios.post('/auth/register', { name, email, password });
+      const response = await axios.post('/auth/register', { name, email });
       return response.data;
     } catch (error) {
       throw error;
     }
   };
 
-  const verifyEmailOtp = async (email, otp) => {
+  const verifyEmailOtp = async (email, otp, password, confirmPassword) => {
     try {
-      const response = await verifyEmailOtpApi(email, otp);
+      const response = await verifyEmailOtpApi(email, otp, password, confirmPassword);
       const { token, ...user } = response.data;
       setUserToken(token);
       setUserInfo(user);

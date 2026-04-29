@@ -1,7 +1,7 @@
 import React, { useContext, useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  Platform, StatusBar, TouchableOpacity, Alert,
+  Platform, StatusBar, TouchableOpacity, Alert, Linking,
 } from 'react-native';
 import CustomButton from '../../components/CustomButton';
 import { AuthContext } from '../../context/AuthContext';
@@ -299,6 +299,11 @@ const AppointmentDetailsScreen = ({ route, navigation }) => {
                 <Text style={styles.reportType}>{r.reportType}</Text>
                 <Text style={styles.reportDesc}>{r.description}</Text>
                 {r.fileName ? <Text style={styles.reportMeta}>File: {r.fileName}</Text> : null}
+                {r.fileUrl ? (
+                  <TouchableOpacity style={styles.viewFileBtn} onPress={() => Linking.openURL(r.fileUrl)}>
+                    <Text style={styles.viewFileText}>View File</Text>
+                  </TouchableOpacity>
+                ) : null}
                 {(canManageReports || isAdmin) ? (
                   <View style={styles.reportActions}>
                     {canManageReports ? (
@@ -327,12 +332,14 @@ const AppointmentDetailsScreen = ({ route, navigation }) => {
           )}
         </View>
 
-        {/* Action buttons for patient before approval */}
-        {canModify ? (
+        {/* Action buttons */}
+        {canModify || isAdmin ? (
           <View style={styles.actionRow}>
-            <TouchableOpacity style={[styles.actionBtn, styles.editBtn]} onPress={handleEdit} activeOpacity={0.85}>
-              <Text style={styles.actionBtnText}>Edit Appointment</Text>
-            </TouchableOpacity>
+            {canModify ? (
+              <TouchableOpacity style={[styles.actionBtn, styles.editBtn]} onPress={handleEdit} activeOpacity={0.85}>
+                <Text style={styles.actionBtnText}>Edit Appointment</Text>
+              </TouchableOpacity>
+            ) : null}
             <TouchableOpacity style={[styles.actionBtn, styles.deleteBtn]} onPress={handleDelete} activeOpacity={0.85}>
               <Text style={styles.actionBtnText}>Delete Appointment</Text>
             </TouchableOpacity>
@@ -479,6 +486,15 @@ const styles = StyleSheet.create({
   reportType: { fontSize: 12, fontWeight: FONTS.bold, color: COLORS.tealStrong },
   reportDesc: { fontSize: 13, color: COLORS.navyDeep, marginTop: 2 },
   reportMeta: { fontSize: 11, color: COLORS.textSecondary, marginTop: 2 },
+  viewFileBtn: {
+    alignSelf: 'flex-start',
+    marginTop: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.white,
+  },
+  viewFileText: { color: COLORS.tealStrong, fontSize: 11, fontWeight: FONTS.bold },
   reportActions: { flexDirection: 'row', gap: 8, marginTop: 8 },
   reportActionBtn: {
     paddingVertical: 6,

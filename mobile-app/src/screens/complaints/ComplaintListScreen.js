@@ -172,6 +172,14 @@ const ComplaintListScreen = ({ navigation, route }) => {
                   >
                     <Text style={styles.actionBtnText}>Resolved</Text>
                   </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.actionBtn, styles.deleteBtn]}
+                    disabled={deletingId === item._id}
+                    onPress={() => handleDelete(item._id)}
+                  >
+                    <Text style={styles.actionBtnText}>Delete</Text>
+                  </TouchableOpacity>
                 </View>
               )}
             </View>

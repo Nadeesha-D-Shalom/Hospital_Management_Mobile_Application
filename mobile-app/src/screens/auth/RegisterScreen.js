@@ -8,11 +8,13 @@ import CustomInput from '../../components/CustomInput';
 import CustomButton from '../../components/CustomButton';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { COLORS, FONTS, RADIUS, SHADOW } from '../../theme';
+import { validateEmail, validatePassword } from '../../utils/validators';
 
 const RegisterScreen = ({ navigation }) => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [otp, setOtp] = useState('');
   const [otpStep, setOtpStep] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -29,13 +31,17 @@ const RegisterScreen = ({ navigation }) => {
   }, []);
 
   const handleRegister = async () => {
-    if (!name || !email || !password) {
-      Alert.alert('Missing Fields', 'Please fill in all fields to continue.');
+    if (!name || !email) {
+      Alert.alert('Missing Fields', 'Please enter your name and email.');
+      return;
+    }
+    if (!validateEmail(email.trim())) {
+      Alert.alert('Invalid Email', 'Please enter a valid email address.');
       return;
     }
     setLoading(true);
     try {
-      await register(name, email, password);
+      await register(name.trim(), email.trim().toLowerCase());
       setOtpStep(true);
       Alert.alert('OTP Sent', 'We sent a verification OTP to your email. It is valid for 2 minutes.');
     } catch (error) {
@@ -50,9 +56,17 @@ const RegisterScreen = ({ navigation }) => {
       Alert.alert('Missing OTP', 'Please enter the OTP sent to your email.');
       return;
     }
+    if (!validatePassword(password)) {
+      Alert.alert('Weak Password', 'Password must be at least 6 characters.');
+      return;
+    }
+    if (password !== confirmPassword) {
+      Alert.alert('Password Mismatch', 'Passwords do not match.');
+      return;
+    }
     setLoading(true);
     try {
-      await verifyEmailOtp(email, otp);
+      await verifyEmailOtp(email.trim().toLowerCase(), otp, password, confirmPassword);
       Alert.alert('Success', 'Your account is verified and created successfully.');
     } catch (error) {
       Alert.alert('Verification Failed', error.response?.data?.message || 'Invalid or expired OTP.');
@@ -89,13 +103,14 @@ const RegisterScreen = ({ navigation }) => {
             <>
               <CustomInput label="Full Name" value={name} onChangeText={setName} placeholder="Dr. / Mr. / Ms. Full Name" />
               <CustomInput label="Email Address" value={email} onChangeText={setEmail} placeholder="you@example.com" keyboardType="email-address" />
-              <CustomInput label="Password" value={password} onChangeText={setPassword} placeholder="Create a strong password" secureTextEntry />
-              <CustomButton title="Create Account" onPress={handleRegister} style={styles.btn} />
+              <CustomButton title="Send OTP" onPress={handleRegister} style={styles.btn} />
             </>
           ) : (
             <>
-              <CustomInput label="Email Address" value={email} onChangeText={setEmail} placeholder="you@example.com" keyboardType="email-address" />
+              <CustomInput label="Email Address" value={email} onChangeText={setEmail} placeholder="you@example.com" keyboardType="email-address" editable={false} />
               <CustomInput label="OTP" value={otp} onChangeText={(v) => setOtp(v.replace(/[^0-9]/g, ''))} placeholder="Enter 6-digit OTP" keyboardType="number-pad" />
+              <CustomInput label="Password" value={password} onChangeText={setPassword} placeholder="Create a strong password" secureTextEntry />
+              <CustomInput label="Confirm Password" value={confirmPassword} onChangeText={setConfirmPassword} placeholder="Re-enter your password" secureTextEntry />
               <CustomButton title="Verify OTP & Create Account" onPress={handleVerifyOtp} style={styles.btn} />
               <TouchableOpacity onPress={handleRegister} activeOpacity={0.7}>
                 <Text style={styles.loginLink}>Resend OTP</Text>

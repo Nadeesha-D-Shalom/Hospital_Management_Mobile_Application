@@ -1,6 +1,7 @@
 const Appointment = require('../models/appointment.model');
 const Doctor = require('../models/doctor.model');
 const Service = require('../models/service.model');
+const AppointmentReport = require('../models/appointmentReport.model');
 const asyncHandler = require('../utils/asyncHandler');
 const { sendEmail } = require('../utils/email');
 
@@ -250,6 +251,7 @@ exports.deleteAppointment = asyncHandler(async (req, res) => {
     return res.status(403).json({ message: 'Cannot delete appointment after approval or rejection' });
   }
 
+  await AppointmentReport.deleteMany({ appointmentId: appointment._id });
   await appointment.deleteOne();
 
   res.status(200).json({ message: 'Appointment deleted successfully' });

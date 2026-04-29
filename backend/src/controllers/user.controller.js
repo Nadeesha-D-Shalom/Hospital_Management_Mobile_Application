@@ -4,6 +4,7 @@ const Appointment = require('../models/appointment.model');
 const Complaint = require('../models/complaint.model');
 const Payment = require('../models/payment.model');
 const Report = require('../models/report.model');
+const AppointmentReport = require('../models/appointmentReport.model');
 const asyncHandler = require('../utils/asyncHandler');
 
 exports.getUsers = asyncHandler(async (req, res) => {
@@ -61,7 +62,15 @@ exports.deleteUser = asyncHandler(async (req, res) => {
     return res.status(404).json({ message: 'User not found' });
   }
 
-  await user.remove();
+  await Promise.all([
+    Appointment.deleteMany({ userId: id }),
+    Complaint.deleteMany({ userId: id }),
+    Payment.deleteMany({ userId: id }),
+    Report.deleteMany({ generatedBy: id }),
+    AppointmentReport.deleteMany({ userId: id }),
+  ]);
+
+  await user.deleteOne();
   res.status(200).json({ message: 'User deleted successfully' });
 });
 
@@ -113,9 +122,10 @@ exports.deleteMyAccount = asyncHandler(async (req, res) => {
     Complaint.deleteMany({ userId }),
     Payment.deleteMany({ userId }),
     Report.deleteMany({ generatedBy: userId }),
+    AppointmentReport.deleteMany({ userId }),
   ]);
 
-  await user.remove();
+  await user.deleteOne();
 
   res.status(200).json({ message: 'Your account has been deleted successfully' });
 });

@@ -5,10 +5,14 @@ import {
 } from 'react-native';
 import { createAppointmentApi, updateAppointmentApi } from '../../api/appointmentApi';
 import { getServicesApi } from '../../api/serviceApi';
+import { createReportApi, getReportsByAppointmentApi, updateReportApi } from '../../api/appointmentReportApi';
+import { uploadAppointmentReportFileApi } from '../../api/uploadApi';
 import CustomInput from '../../components/CustomInput';
 import CustomButton from '../../components/CustomButton';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import ScreenHeader from '../../components/ScreenHeader';
+import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import { COLORS, FONTS, RADIUS, SHADOW } from '../../theme';
 
 const getTodayDate = () => {
@@ -53,6 +57,12 @@ const AppointmentBookingScreen = ({ route, navigation }) => {
   const [appointmentTime, setAppointmentTime] = useState(appointment?.appointmentTime || '');
   const [notes, setNotes] = useState(appointment?.notes || '');
   const [paymentMethod, setPaymentMethod] = useState(appointment?.paymentMethod || 'cash');
+  const [addReport, setAddReport] = useState(false);
+  const [reportId, setReportId] = useState(null);
+  const [reportType, setReportType] = useState('');
+  const [reportDescription, setReportDescription] = useState('');
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [existingFileName, setExistingFileName] = useState('');
   const [loading, setLoading] = useState(false);
 
   const availableDates = getUpcomingDates(14);
@@ -71,14 +81,107 @@ const AppointmentBookingScreen = ({ route, navigation }) => {
     })();
   }, []);
 
+  useEffect(() => {
+    if (!isEdit || !appointment?._id || appointment.status !== 'pending') return;
+    (async () => {
+      try {
+        const res = await getReportsByAppointmentApi(appointment._id);
+        const firstReport = Array.isArray(res.data) ? res.data[0] : null;
+        if (firstReport) {
+          setAddReport(true);
+          setReportId(firstReport._id);
+          setReportType(firstReport.reportType || '');
+          setReportDescription(firstReport.description || '');
+          setExistingFileName(firstReport.fileName || '');
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    })();
+  }, [appointment?._id, appointment?.status, isEdit]);
+
   const isValidDate = (d) => /^\d{4}-\d{2}-\d{2}$/.test(String(d));
   const isValidTime = (t) => /^\d{2}:\d{2}$/.test(String(t));
+
+  const pickImageFile = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: false,
+      quality: 0.9,
+    });
+    if (!result.canceled && result.assets?.[0]) {
+      const f = result.assets[0];
+      setSelectedFile({
+        uri: f.uri,
+        name: f.fileName || `report-${Date.now()}.jpg`,
+        type: f.mimeType || 'image/jpeg',
+      });
+    }
+  };
+
+  const pickPdfFile = async () => {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: 'application/pdf',
+      multiple: false,
+      copyToCacheDirectory: true,
+    });
+    if (!result.canceled && result.assets?.[0]) {
+      const f = result.assets[0];
+      setSelectedFile({
+        uri: f.uri,
+        name: f.name || `report-${Date.now()}.pdf`,
+        type: f.mimeType || 'application/pdf',
+      });
+    }
+  };
+
+  const uploadSelectedReportFile = async () => {
+    if (!selectedFile) return {};
+    const formData = new FormData();
+    formData.append('reportFile', selectedFile);
+    const res = await uploadAppointmentReportFileApi(formData);
+    return res.data;
+  };
+
+  const saveAppointmentReport = async (appointmentId) => {
+    if (!addReport) return;
+    if (!reportType.trim() || !reportDescription.trim()) {
+      throw new Error('Please enter report type and description.');
+    }
+    if (!selectedFile && !existingFileName) {
+      throw new Error('Please upload the report as an image or PDF.');
+    }
+
+    const uploaded = await uploadSelectedReportFile();
+    const payload = {
+      appointmentId,
+      reportType: reportType.trim(),
+      description: reportDescription.trim(),
+      fileUrl: uploaded.fileUrl,
+      fileName: uploaded.fileName,
+      fileType: uploaded.fileType,
+    };
+
+    if (reportId) {
+      await updateReportApi(reportId, payload);
+    } else {
+      await createReportApi(payload);
+    }
+  };
 
   const handleBook = async () => {
     if (!doctorData?._id) { Alert.alert('Error', 'Doctor info missing'); return; }
     if (!selectedServiceId || !appointmentDate || !appointmentTime) { Alert.alert('Error', 'Please fill all required fields'); return; }
     if (!isValidDate(appointmentDate)) { Alert.alert('Error', 'Date must be YYYY-MM-DD'); return; }
     if (!isValidTime(appointmentTime)) { Alert.alert('Error', 'Time must be HH:MM'); return; }
+    if (addReport && (!reportType.trim() || !reportDescription.trim())) {
+      Alert.alert('Missing Report Details', 'Please enter report type and details.');
+      return;
+    }
+    if (addReport && !selectedFile && !existingFileName) {
+      Alert.alert('Missing Report File', 'Please upload the report as an image or PDF.');
+      return;
+    }
 
     setLoading(true);
     try {
@@ -91,9 +194,10 @@ const AppointmentBookingScreen = ({ route, navigation }) => {
           notes,
           paymentMethod,
         });
+        await saveAppointmentReport(appointment._id);
         Alert.alert('Appointment Updated', 'Your appointment has been updated successfully.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
       } else {
-        await createAppointmentApi({
+        const res = await createAppointmentApi({
           doctorId: doctorData._id,
           serviceId: selectedServiceId,
           appointmentDate,
@@ -101,10 +205,11 @@ const AppointmentBookingScreen = ({ route, navigation }) => {
           notes,
           paymentMethod,
         });
+        await saveAppointmentReport(res.data._id);
         Alert.alert('Appointment Booked', 'Your appointment has been successfully scheduled.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
       }
     } catch (error) {
-      Alert.alert('Booking Failed', error.response?.data?.message || 'Please try again.');
+      Alert.alert('Booking Failed', error.response?.data?.message || error.message || 'Please try again.');
     } finally {
       setLoading(false);
     }
@@ -204,6 +309,52 @@ const AppointmentBookingScreen = ({ route, navigation }) => {
 
         <View style={styles.formCard}>
           <CustomInput label="Notes (optional)" value={notes} onChangeText={setNotes} placeholder="Any special instructions..." multiline numberOfLines={3} />
+        </View>
+
+        <Text style={styles.sectionLabel}>REPORTS (OPTIONAL)</Text>
+        <View style={styles.reportCard}>
+          <TouchableOpacity
+            style={[styles.methodItem, addReport && styles.methodItemSelected]}
+            onPress={() => setAddReport((prev) => !prev)}
+            activeOpacity={0.85}
+          >
+            <Text style={[styles.methodTitle, addReport && styles.methodTitleSelected]}>Add Report</Text>
+            <View style={[styles.radio, addReport && styles.radioSelected]}>
+              {addReport ? <View style={styles.radioDot} /> : null}
+            </View>
+          </TouchableOpacity>
+
+          {addReport ? (
+            <View style={styles.reportForm}>
+              <CustomInput
+                label="Report Type"
+                value={reportType}
+                onChangeText={setReportType}
+                placeholder="e.g. ECG, blood, scan, other"
+              />
+              <CustomInput
+                label="Report Details"
+                value={reportDescription}
+                onChangeText={setReportDescription}
+                placeholder="Describe what the report is about"
+                multiline
+                numberOfLines={3}
+              />
+              <View style={styles.fileRow}>
+                <TouchableOpacity style={styles.fileBtn} onPress={pickImageFile}>
+                  <Text style={styles.fileBtnText}>Upload Image</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.fileBtn} onPress={pickPdfFile}>
+                  <Text style={styles.fileBtnText}>Upload PDF</Text>
+                </TouchableOpacity>
+              </View>
+              {selectedFile ? (
+                <Text style={styles.fileInfo}>Selected: {selectedFile.name}</Text>
+              ) : existingFileName ? (
+                <Text style={styles.fileInfo}>Current file: {existingFileName}</Text>
+              ) : null}
+            </View>
+          ) : null}
         </View>
 
         {/* Payment method selection (stored with appointment; actual payment only after approval) */}
@@ -346,6 +497,27 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white, borderRadius: RADIUS.lg,
     padding: 16, marginBottom: 16, ...SHADOW.card,
   },
+  reportCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.lg,
+    overflow: 'hidden',
+    marginBottom: 16,
+    ...SHADOW.card,
+  },
+  reportForm: {
+    padding: 16,
+  },
+  fileRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
+  fileBtn: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: COLORS.tealStrong,
+    borderRadius: RADIUS.md,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  fileBtnText: { color: COLORS.tealStrong, fontSize: 12, fontWeight: FONTS.semibold },
+  fileInfo: { fontSize: 11, color: COLORS.textSecondary, marginBottom: 4 },
   bookBtn: { marginTop: 8 },
 
   methodsCard: {

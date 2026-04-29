@@ -6,19 +6,20 @@ const asyncHandler = require('../utils/asyncHandler');
 const { sendEmail } = require('../utils/email');
 
 exports.registerUser = asyncHandler(async (req, res) => {
-  const { name, email, password } = req.body;
+  const { name, email } = req.body;
+  const normalizedEmail = String(email || '').trim().toLowerCase();
 
-  if (!name || !email || !password) {
-    return res.status(400).json({ message: 'Name, email, and password are required' });
+  if (!name || !normalizedEmail) {
+    return res.status(400).json({ message: 'Name and email are required' });
   }
 
   // Validate email format
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(email)) {
+  if (!emailRegex.test(normalizedEmail)) {
     return res.status(400).json({ message: 'Please enter a valid email address' });
   }
 
-  const existingUser = await User.findOne({ email });
+  const existingUser = await User.findOne({ email: normalizedEmail });
   if (existingUser && existingUser.emailVerified) {
     return res.status(400).json({ message: 'Email is already registered' });
   }
@@ -29,10 +30,6 @@ exports.registerUser = asyncHandler(async (req, res) => {
 
   let user = existingUser;
   if (!user) {
-    // Create unverified user
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
-
     let role = 'patient';
     if (req.body.role && ['patient', 'doctor', 'admin'].includes(req.body.role)) {
       role = req.body.role;
@@ -43,8 +40,7 @@ exports.registerUser = asyncHandler(async (req, res) => {
 
     user = await User.create({
       name,
-      email,
-      password: hashedPassword,
+      email: normalizedEmail,
       role,
       emailVerified: false,
       emailVerificationOtpHash: hashedOtp,
@@ -53,7 +49,6 @@ exports.registerUser = asyncHandler(async (req, res) => {
   } else {
     // Update existing unverified user
     user.name = name;
-    user.password = await bcrypt.hash(password, 10);
     user.emailVerificationOtpHash = hashedOtp;
     user.emailVerificationOtpExpiresAt = new Date(Date.now() + 2 * 60 * 1000);
     await user.save();
@@ -61,7 +56,7 @@ exports.registerUser = asyncHandler(async (req, res) => {
 
   // Send OTP email
   await sendEmail({
-    to: email,
+    to: normalizedEmail,
     subject: 'Email Verification OTP - Hospital App',
     text: `Dear ${name},
 
@@ -98,19 +93,28 @@ Hospital App Team`,
 
   res.status(200).json({
     message: 'OTP sent to your email. Please verify your email to complete registration.',
-    email,
+    email: normalizedEmail,
     requiresEmailVerification: true,
   });
 });
 
 exports.verifyEmailOtp = asyncHandler(async (req, res) => {
-  const { email, otp } = req.body;
+  const { email, otp, password, confirmPassword } = req.body;
+  const normalizedEmail = String(email || '').trim().toLowerCase();
 
-  if (!email || !otp) {
-    return res.status(400).json({ message: 'Email and OTP are required' });
+  if (!normalizedEmail || !otp || !password) {
+    return res.status(400).json({ message: 'Email, OTP, and password are required' });
   }
 
-  const user = await User.findOne({ email });
+  if (confirmPassword !== undefined && password !== confirmPassword) {
+    return res.status(400).json({ message: 'Passwords do not match' });
+  }
+
+  if (String(password).length < 6) {
+    return res.status(400).json({ message: 'Password must be at least 6 characters' });
+  }
+
+  const user = await User.findOne({ email: normalizedEmail });
   if (!user || !user.emailVerificationOtpHash || !user.emailVerificationOtpExpiresAt) {
     return res.status(400).json({ message: 'No active OTP found. Please request a new registration.' });
   }
@@ -128,6 +132,8 @@ exports.verifyEmailOtp = asyncHandler(async (req, res) => {
   }
 
   user.emailVerified = true;
+  const salt = await bcrypt.genSalt(10);
+  user.password = await bcrypt.hash(password, salt);
   user.emailVerificationOtpHash = undefined;
   user.emailVerificationOtpExpiresAt = undefined;
   await user.save();
@@ -149,12 +155,13 @@ exports.verifyEmailOtp = asyncHandler(async (req, res) => {
 
 exports.loginUser = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
+  const normalizedEmail = String(email || '').trim().toLowerCase();
 
-  if (!email || !password) {
+  if (!normalizedEmail || !password) {
     return res.status(400).json({ message: 'Email and password are required' });
   }
 
-  const user = await User.findOne({ email });
+  const user = await User.findOne({ email: normalizedEmail });
   if (!user) {
     return res.status(401).json({ message: 'Invalid credentials' });
   }
@@ -189,12 +196,13 @@ exports.getMe = asyncHandler(async (req, res) => {
 
 exports.requestPasswordResetOtp = asyncHandler(async (req, res) => {
   const { email } = req.body;
+  const normalizedEmail = String(email || '').trim().toLowerCase();
 
-  if (!email) {
+  if (!normalizedEmail) {
     return res.status(400).json({ message: 'Email is required' });
   }
 
-  const user = await User.findOne({ email });
+  const user = await User.findOne({ email: normalizedEmail });
   if (!user) {
     return res.status(404).json({ message: 'User not found' });
   }
@@ -255,12 +263,13 @@ Hospital App Team`,
 
 exports.verifyPasswordResetOtp = asyncHandler(async (req, res) => {
   const { email, otp } = req.body;
+  const normalizedEmail = String(email || '').trim().toLowerCase();
 
-  if (!email || !otp) {
+  if (!normalizedEmail || !otp) {
     return res.status(400).json({ message: 'Email and OTP are required' });
   }
 
-  const user = await User.findOne({ email });
+  const user = await User.findOne({ email: normalizedEmail });
   if (!user || !user.resetPasswordOtpHash || !user.resetPasswordOtpExpiresAt) {
     return res.status(400).json({ message: 'No active OTP found. Please request a new OTP.' });
   }
@@ -286,8 +295,9 @@ exports.verifyPasswordResetOtp = asyncHandler(async (req, res) => {
 
 exports.resetPasswordWithOtp = asyncHandler(async (req, res) => {
   const { email, newPassword, confirmPassword } = req.body;
+  const normalizedEmail = String(email || '').trim().toLowerCase();
 
-  if (!email || !newPassword || !confirmPassword) {
+  if (!normalizedEmail || !newPassword || !confirmPassword) {
     return res.status(400).json({ message: 'Email, newPassword, and confirmPassword are required' });
   }
 
@@ -295,7 +305,7 @@ exports.resetPasswordWithOtp = asyncHandler(async (req, res) => {
     return res.status(400).json({ message: 'Passwords do not match' });
   }
 
-  const user = await User.findOne({ email });
+  const user = await User.findOne({ email: normalizedEmail });
   if (!user) {
     return res.status(404).json({ message: 'User not found' });
   }

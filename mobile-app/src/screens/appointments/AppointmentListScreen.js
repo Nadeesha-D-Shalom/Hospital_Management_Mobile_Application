@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { View, FlatList, StyleSheet, Alert, TouchableOpacity, Text } from 'react-native';
-import { getAppointmentsApi, updateAppointmentStatusApi } from '../../api/appointmentApi';
+import { deleteAppointmentApi, getAppointmentsApi, updateAppointmentStatusApi } from '../../api/appointmentApi';
 import AppointmentCard from '../../components/AppointmentCard';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import EmptyState from '../../components/EmptyState';
@@ -73,6 +73,32 @@ const AppointmentListScreen = ({ navigation }) => {
     }
   };
 
+  const handleDelete = (id) => {
+    Alert.alert(
+      'Delete Appointment',
+      'Are you sure you want to delete this appointment? This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setActionLoadingId(id);
+            try {
+              await deleteAppointmentApi(id);
+              setAppointments((prev) => prev.filter((a) => a._id !== id));
+              Alert.alert('Deleted', 'Appointment deleted successfully.');
+            } catch (error) {
+              Alert.alert('Error', error.response?.data?.message || 'Delete failed');
+            } finally {
+              setActionLoadingId(null);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   if (loading) return <LoadingSpinner message="Loading appointments..." />;
 
   return (
@@ -99,23 +125,35 @@ const AppointmentListScreen = ({ navigation }) => {
               appointment={item}
               onPress={() => navigation.navigate('AppointmentDetails', { appointment: item })}
             />
-            {isAdmin && item.status === 'pending' ? (
+            {isAdmin ? (
               <View style={styles.adminActions}>
+                {item.status === 'pending' ? (
+                  <>
+                    <TouchableOpacity
+                      style={[styles.actionBtn, styles.actionBtnLeft, styles.approveBtn]}
+                      disabled={actionLoadingId === item._id}
+                      activeOpacity={0.8}
+                      onPress={() => handleStatusChange(item._id, 'approved')}
+                    >
+                      <Text style={styles.actionBtnText}>Approve</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.actionBtn, styles.actionBtnLeft, styles.rejectBtn]}
+                      disabled={actionLoadingId === item._id}
+                      activeOpacity={0.8}
+                      onPress={() => handleStatusChange(item._id, 'rejected')}
+                    >
+                      <Text style={styles.actionBtnText}>Reject</Text>
+                    </TouchableOpacity>
+                  </>
+                ) : null}
                 <TouchableOpacity
-                  style={[styles.actionBtn, styles.actionBtnLeft, styles.approveBtn]}
+                  style={[styles.actionBtn, styles.deleteBtn]}
                   disabled={actionLoadingId === item._id}
                   activeOpacity={0.8}
-                  onPress={() => handleStatusChange(item._id, 'approved')}
+                  onPress={() => handleDelete(item._id)}
                 >
-                  <Text style={styles.actionBtnText}>✓ Approve</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.actionBtn, styles.rejectBtn]}
-                  disabled={actionLoadingId === item._id}
-                  activeOpacity={0.8}
-                  onPress={() => handleStatusChange(item._id, 'rejected')}
-                >
-                  <Text style={styles.actionBtnText}>✕ Reject</Text>
+                  <Text style={styles.actionBtnText}>Delete</Text>
                 </TouchableOpacity>
               </View>
             ) : null}
@@ -144,6 +182,7 @@ const styles = StyleSheet.create({
   },
   approveBtn: { backgroundColor: COLORS.success },
   rejectBtn: { backgroundColor: COLORS.danger },
+  deleteBtn: { backgroundColor: COLORS.navyDeep },
   actionBtnText: { color: COLORS.white, fontSize: 13, fontWeight: FONTS.bold },
 });
 

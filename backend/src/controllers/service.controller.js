@@ -57,6 +57,6 @@ exports.deleteService = asyncHandler(async (req, res) => {
     return res.status(404).json({ message: 'Service not found' });
   }
 
-  await service.remove();
+  await service.deleteOne();
   res.status(200).json({ message: 'Service deleted successfully' });
 });

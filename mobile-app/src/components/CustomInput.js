@@ -12,6 +12,7 @@ const CustomInput = ({
   multiline,
   numberOfLines,
   style,
+  ...textInputProps
 }) => {
   const [focused, setFocused] = useState(false);
   const borderAnim = useRef(new Animated.Value(0)).current;
@@ -47,6 +48,7 @@ const CustomInput = ({
           autoCapitalize="none"
           onFocus={onFocus}
           onBlur={onBlur}
+          {...textInputProps}
         />
       </Animated.View>
     </View>
