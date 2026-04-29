@@ -2,6 +2,7 @@ const Appointment = require('../models/appointment.model');
 const Doctor = require('../models/doctor.model');
 const Service = require('../models/service.model');
 const asyncHandler = require('../utils/asyncHandler');
+const { sendEmail } = require('../utils/email');
 
 const getDayRangeUTC = (dateValue) => {
   const d = new Date(dateValue);
@@ -15,10 +16,17 @@ const getDayRangeUTC = (dateValue) => {
 const isValidTime = (t) => /^\d{2}:\d{2}$/.test(String(t));
 
 exports.createAppointment = asyncHandler(async (req, res) => {
-  const { doctorId, serviceId, appointmentDate, appointmentTime, notes } = req.body;
+  const { doctorId, serviceId, appointmentDate, appointmentTime, notes, paymentMethod } = req.body;
 
   if (!doctorId || !serviceId || !appointmentDate || !appointmentTime) {
     return res.status(400).json({ message: 'Doctor, service, date, and time are required' });
+  }
+
+  if (paymentMethod !== undefined) {
+    const allowedPaymentMethods = ['cash', 'card'];
+    if (!allowedPaymentMethods.includes(paymentMethod)) {
+      return res.status(400).json({ message: 'paymentMethod must be either cash or card' });
+    }
   }
 
   if (!isValidTime(appointmentTime)) {
@@ -56,13 +64,15 @@ exports.createAppointment = asyncHandler(async (req, res) => {
     appointmentDate: new Date(appointmentDate),
     appointmentTime,
     notes,
+    paymentMethod: paymentMethod || 'cash',
   });
 
   res.status(201).json(appointment);
 });
 
 exports.getAppointments = asyncHandler(async (req, res) => {
-  const filter = req.user.role === 'admin' ? {} : { userId: req.user._id };
+  // Patients should only see appointments after admin approval.
+  const filter = req.user.role === 'admin' ? {} : { userId: req.user._id, status: 'approved' };
   const appointments = await Appointment.find(filter)
     .populate('doctorId')
     .populate('serviceId')
@@ -82,6 +92,10 @@ exports.getAppointmentById = asyncHandler(async (req, res) => {
 
   if (req.user.role !== 'admin' && appointment.userId._id.toString() !== req.user._id.toString()) {
     return res.status(403).json({ message: 'Forbidden' });
+  }
+
+  if (req.user.role !== 'admin' && appointment.status !== 'approved') {
+    return res.status(404).json({ message: 'Appointment not found' });
   }
 
   res.status(200).json(appointment);
@@ -185,6 +199,74 @@ exports.updateAppointmentStatus = asyncHandler(async (req, res) => {
 
   appointment.status = status;
   await appointment.save();
+
+  if (status === 'approved') {
+    try {
+      const populated = await Appointment.findById(appointment._id)
+        .populate('userId', '-password')
+        .populate('doctorId')
+        .populate('serviceId');
+
+      const user = populated?.userId;
+      const doctor = populated?.doctorId;
+      const service = populated?.serviceId;
+
+      const amountToPay = service?.price ?? 0;
+      const paymentMethodText = populated?.paymentMethod === 'card' ? 'Card (pay at hospital)' : 'Cash';
+
+      if (user?.email) {
+        const dateStr = populated.appointmentDate
+          ? new Date(populated.appointmentDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })
+          : '';
+
+        const timeStr = populated.appointmentTime || '';
+
+        await sendEmail({
+          to: user.email,
+          subject: 'Appointment Confirmed - Olympus Lanka Hospital',
+          text:
+            `Hello ${user.name},\n\n` +
+            `Your appointment has been approved.\n\n` +
+            `Your details:\n` +
+            `- Name: ${user.name}\n` +
+            `- Email: ${user.email}\n` +
+            (user.phone ? `- Phone: ${user.phone}\n` : '') +
+            (user.address ? `- Address: ${user.address}\n` : '') +
+            `\n` +
+            `Doctor: ${doctor?.name || 'N/A'} (${doctor?.specialization || ''})\n` +
+            `Service: ${service?.serviceName || 'N/A'}\n` +
+            `Date & Time: ${dateStr} at ${timeStr}\n` +
+            `Amount to pay: LKR ${amountToPay}\n` +
+            `Payment method: ${paymentMethodText}\n\n` +
+            `Thank you,\nOlympus Lanka Hospital`,
+          html:
+            `<p>Hello <b>${user.name}</b>,</p>` +
+            `<p>Your appointment has been approved.</p>` +
+            `<p><b>Your details:</b></p>` +
+            `<ul>` +
+            `<li><b>Name:</b> ${user.name}</li>` +
+            `<li><b>Email:</b> ${user.email}</li>` +
+            (user.phone ? `<li><b>Phone:</b> ${user.phone}</li>` : '') +
+            (user.address ? `<li><b>Address:</b> ${user.address}</li>` : '') +
+            `</ul>` +
+            `<ul>` +
+            `<li><b>Doctor:</b> ${doctor?.name || 'N/A'} (${doctor?.specialization || ''})</li>` +
+            `<li><b>Service:</b> ${service?.serviceName || 'N/A'}</li>` +
+            `<li><b>Date & Time:</b> ${dateStr} at ${timeStr}</li>` +
+            `<li><b>Amount to pay:</b> LKR ${amountToPay}</li>` +
+            `<li><b>Payment method:</b> ${paymentMethodText}</li>` +
+            `</ul>` +
+            `<p>Thank you,<br/>Olympus Lanka Hospital</p>` +
+            (populated?.paymentMethod === 'card'
+              ? `<p style="color:#b45309"><b>Note:</b> Card payment facility will be available soon. Please make payment when you visit the hospital.</p>`
+              : ''),
+        });
+      }
+    } catch (e) {
+      // Don't block appointment status change if email fails.
+      console.error('Failed to send appointment approval email:', e?.message || e);
+    }
+  }
 
   res.status(200).json(appointment);
 });
