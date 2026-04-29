@@ -1,16 +1,18 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Alert, ScrollView } from 'react-native';
-import { createComplaintApi } from '../../api/complaintApi';
+import { createComplaintApi, updateComplaintApi } from '../../api/complaintApi';
 import CustomInput from '../../components/CustomInput';
 import CustomButton from '../../components/CustomButton';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import ScreenHeader from '../../components/ScreenHeader';
 import { COLORS, FONTS, RADIUS, SHADOW } from '../../theme';
 
-const ComplaintFormScreen = ({ navigation }) => {
-  const [subject, setSubject] = useState('');
-  const [message, setMessage] = useState('');
+const ComplaintFormScreen = ({ navigation, route }) => {
+  const complaint = route?.params?.complaint;
+  const [subject, setSubject] = useState(complaint?.subject || '');
+  const [message, setMessage] = useState(complaint?.message || '');
   const [loading, setLoading] = useState(false);
+  const isEdit = Boolean(complaint);
 
   const handleSubmit = async () => {
     if (!subject || !message) {
@@ -19,10 +21,17 @@ const ComplaintFormScreen = ({ navigation }) => {
     }
     setLoading(true);
     try {
-      await createComplaintApi({ subject, message });
-      Alert.alert('Submitted', 'Your complaint has been received. We will get back to you shortly.', [
-        { text: 'OK', onPress: () => navigation.goBack() },
-      ]);
+      if (isEdit && complaint?._id) {
+        await updateComplaintApi(complaint._id, { subject, message });
+        Alert.alert('Updated', 'Your complaint has been updated successfully.', [
+          { text: 'OK', onPress: () => navigation.goBack() },
+        ]);
+      } else {
+        await createComplaintApi({ subject, message });
+        Alert.alert('Submitted', 'Your complaint has been received. We will get back to you shortly.', [
+          { text: 'OK', onPress: () => navigation.goBack() },
+        ]);
+      }
     } catch (error) {
       Alert.alert('Submission Failed', error.response?.data?.message || 'Please try again.');
     } finally {
@@ -35,8 +44,8 @@ const ComplaintFormScreen = ({ navigation }) => {
   return (
     <View style={styles.root}>
       <ScreenHeader
-        title="Submit Complaint"
-        subtitle="We take all feedback seriously"
+        title={isEdit ? 'Edit Complaint' : 'Submit Complaint'}
+        subtitle={isEdit ? 'Update your complaint before admin review' : 'We take all feedback seriously'}
         onBack={() => navigation.goBack()}
       />
 

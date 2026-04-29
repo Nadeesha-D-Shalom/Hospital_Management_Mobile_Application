@@ -1,10 +1,11 @@
-import React, { useContext } from 'react';
+import React, { useContext, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  Platform, StatusBar, TouchableOpacity,
+  Platform, StatusBar, TouchableOpacity, Alert,
 } from 'react-native';
 import CustomButton from '../../components/CustomButton';
 import { AuthContext } from '../../context/AuthContext';
+import { deleteAppointmentApi } from '../../api/appointmentApi';
 import { COLORS, FONTS, RADIUS, SHADOW, statusColor } from '../../theme';
 
 const DetailRow = ({ label, value, valueStyle }) => (
@@ -17,8 +18,50 @@ const DetailRow = ({ label, value, valueStyle }) => (
 const AppointmentDetailsScreen = ({ route, navigation }) => {
   const { appointment } = route.params;
   const { userInfo } = useContext(AuthContext);
+  const [loading, setLoading] = useState(false);
+
   const isPatient = userInfo?.role === 'patient';
+  const isOwner = appointment.userId?._id?.toString() === userInfo?._id?.toString();
+  const canModify = isPatient && isOwner && appointment.status === 'pending';
   const sc = statusColor(appointment.status);
+
+  const handleDelete = async () => {
+    Alert.alert(
+      'Cancel Booking',
+      'Are you sure you want to delete this appointment? This cannot be undone.',
+      [
+        { text: 'No', style: 'cancel' },
+        {
+          text: 'Yes, delete',
+          style: 'destructive',
+          onPress: async () => {
+            setLoading(true);
+            try {
+              await deleteAppointmentApi(appointment._id);
+              Alert.alert('Deleted', 'Appointment deleted successfully.');
+              navigation.goBack();
+            } catch (error) {
+              Alert.alert('Error', error.response?.data?.message || 'Could not delete appointment.');
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleEdit = () => {
+    navigation.navigate('AppointmentBooking', { appointment });
+  };
+
+  if (loading) {
+    return (
+      <View style={[styles.root, { justifyContent: 'center', alignItems: 'center' }]}>
+        <Text style={styles.loadingText}>Processing request...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.root}>
@@ -97,6 +140,18 @@ const AppointmentDetailsScreen = ({ route, navigation }) => {
           <View style={styles.notesCard}>
             <Text style={styles.notesLabel}>PATIENT NOTES</Text>
             <Text style={styles.notesText}>{appointment.notes}</Text>
+          </View>
+        ) : null}
+
+        {/* Action buttons for patient before approval */}
+        {canModify ? (
+          <View style={styles.actionRow}>
+            <TouchableOpacity style={[styles.actionBtn, styles.editBtn]} onPress={handleEdit} activeOpacity={0.85}>
+              <Text style={styles.actionBtnText}>Edit Appointment</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.actionBtn, styles.deleteBtn]} onPress={handleDelete} activeOpacity={0.85}>
+              <Text style={styles.actionBtnText}>Delete Appointment</Text>
+            </TouchableOpacity>
           </View>
         ) : null}
 
@@ -188,6 +243,29 @@ const styles = StyleSheet.create({
   notesLabel: { fontSize: 10, fontWeight: FONTS.bold, color: COLORS.tealStrong, letterSpacing: 1.5, marginBottom: 6 },
   notesText: { fontSize: 13, color: COLORS.navyDeep, lineHeight: 20 },
 
+  actionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginHorizontal: 16,
+    marginTop: 16,
+  },
+  actionBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: RADIUS.md,
+    alignItems: 'center',
+  },
+  editBtn: {
+    backgroundColor: COLORS.tealStrong,
+    marginRight: 8,
+  },
+  deleteBtn: {
+    backgroundColor: COLORS.danger,
+  },
+  actionBtnText: {
+    color: COLORS.white,
+    fontWeight: FONTS.bold,
+  },
   paymentBanner: {
     backgroundColor: COLORS.white, borderRadius: RADIUS.lg,
     padding: 16, ...SHADOW.card,
@@ -196,6 +274,11 @@ const styles = StyleSheet.create({
   paymentBannerTitle: { fontSize: 15, fontWeight: FONTS.bold, color: COLORS.navyDeep },
   paymentBannerSub: { fontSize: 12, fontWeight: FONTS.regular, color: COLORS.textMuted, marginTop: 2, marginBottom: 12 },
   payBtn: { marginTop: 0, marginVertical: 0 },
+  loadingText: {
+    color: COLORS.navyDeep,
+    fontSize: 14,
+    fontWeight: FONTS.semibold,
+  },
 });
 
 export default AppointmentDetailsScreen;

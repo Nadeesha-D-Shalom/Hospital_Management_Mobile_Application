@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { View, FlatList, StyleSheet, Alert, TouchableOpacity, Text } from 'react-native';
-import { getComplaintsApi, updateComplaintStatusApi } from '../../api/complaintApi';
+import { getComplaintsApi, updateComplaintStatusApi, deleteComplaintApi } from '../../api/complaintApi';
 import ComplaintCard from '../../components/ComplaintCard';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import EmptyState from '../../components/EmptyState';
@@ -15,6 +15,7 @@ const ComplaintListScreen = ({ navigation, route }) => {
   const [loading, setLoading] = useState(true);
   const [adminReply, setAdminReply] = useState('');
   const [actionLoadingId, setActionLoadingId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
 
   const { userInfo } = useContext(AuthContext);
   const isAdmin = userInfo?.role === 'admin';
@@ -79,6 +80,32 @@ const ComplaintListScreen = ({ navigation, route }) => {
     }
   };
 
+  const handleDelete = async (id) => {
+    Alert.alert(
+      'Delete Complaint',
+      'Are you sure you want to delete this complaint? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setDeletingId(id);
+            try {
+              await deleteComplaintApi(id);
+              setComplaints((prev) => prev.filter((c) => c._id !== id));
+              Alert.alert('Deleted', 'Complaint deleted successfully.');
+            } catch (error) {
+              Alert.alert('Error', error.response?.data?.message || 'Unable to delete complaint.');
+            } finally {
+              setDeletingId(null);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   if (loading) return <LoadingSpinner message="Loading complaints..." />;
 
   return (
@@ -103,29 +130,53 @@ const ComplaintListScreen = ({ navigation, route }) => {
         ListEmptyComponent={
           <EmptyState message="No complaints found" />
         }
-        renderItem={({ item }) => (
-          <View>
-            <ComplaintCard complaint={item} />
+        renderItem={({ item }) => {
+          const isOwner = item.userId?._id?.toString() === userInfo?._id?.toString();
+          const canEditOwn = !isAdmin && isOwner && item.status === 'open';
 
-            {isAdmin && (
-              <View style={styles.adminActions}>
-                <TouchableOpacity
-                  style={[styles.actionBtn, styles.progressBtn]}
-                  onPress={() => handleStatusUpdate(item._id, 'in_progress')}
-                >
-                  <Text style={styles.actionBtnText}>In Progress</Text>
-                </TouchableOpacity>
+          return (
+            <View>
+              <ComplaintCard complaint={item} />
 
-                <TouchableOpacity
-                  style={[styles.actionBtn, styles.resolvedBtn]}
-                  onPress={() => handleStatusUpdate(item._id, 'resolved')}
-                >
-                  <Text style={styles.actionBtnText}>Resolved</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-        )}
+              {canEditOwn ? (
+                <View style={styles.userActions}>
+                  <TouchableOpacity
+                    style={[styles.actionBtn, styles.editBtn]}
+                    onPress={() => navigation.navigate('ComplaintForm', { complaint: item })}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.actionBtnText}>Edit</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.actionBtn, styles.deleteBtn]}
+                    onPress={() => handleDelete(item._id)}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.actionBtnText}>Delete</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+
+              {isAdmin && (
+                <View style={styles.adminActions}>
+                  <TouchableOpacity
+                    style={[styles.actionBtn, styles.progressBtn]}
+                    onPress={() => handleStatusUpdate(item._id, 'in_progress')}
+                  >
+                    <Text style={styles.actionBtnText}>In Progress</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.actionBtn, styles.resolvedBtn]}
+                    onPress={() => handleStatusUpdate(item._id, 'resolved')}
+                  >
+                    <Text style={styles.actionBtnText}>Resolved</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          );
+        }}
       />
     </View>
   );
@@ -144,6 +195,28 @@ const styles = StyleSheet.create({
   newBtnText: {
     color: '#fff',
     fontWeight: 'bold',
+  },
+
+  userActions: {
+    flexDirection: 'row',
+    marginHorizontal: 16,
+    marginBottom: 8,
+    gap: 10,
+  },
+
+  actionBtn: {
+    flex: 1,
+    padding: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+
+  editBtn: {
+    backgroundColor: COLORS.tealStrong,
+  },
+
+  deleteBtn: {
+    backgroundColor: COLORS.danger,
   },
 
   adminActions: {

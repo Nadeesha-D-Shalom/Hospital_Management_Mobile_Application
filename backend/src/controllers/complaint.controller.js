@@ -34,6 +34,10 @@ exports.updateComplaint = asyncHandler(async (req, res) => {
     return res.status(403).json({ message: 'Forbidden' });
   }
 
+  if (!isAdmin && complaint.status !== 'open') {
+    return res.status(403).json({ message: 'Cannot modify complaint after processing has started' });
+  }
+
   if (subject !== undefined) complaint.subject = subject;
   if (message !== undefined) complaint.message = message;
 
@@ -123,6 +127,10 @@ exports.deleteComplaint = asyncHandler(async (req, res) => {
 
   if (!isAdmin && !isOwner) {
     return res.status(403).json({ message: 'Forbidden' });
+  }
+
+  if (!isAdmin && complaint.status !== 'open') {
+    return res.status(403).json({ message: 'Cannot delete complaint after processing has started' });
   }
 
   await complaint.deleteOne();

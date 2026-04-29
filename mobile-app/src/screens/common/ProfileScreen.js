@@ -4,7 +4,8 @@ import {
   TouchableOpacity, Platform, StatusBar,
 } from 'react-native';
 import { AuthContext } from '../../context/AuthContext';
-import { updateUserApi } from '../../api/userApi';
+import { updateUserApi, deleteMyAccountApi } from '../../api/userApi';
+import { requestPasswordResetOtpApi } from '../../api/authApi';
 import CustomInput from '../../components/CustomInput';
 import CustomButton from '../../components/CustomButton';
 import LoadingSpinner from '../../components/LoadingSpinner';
@@ -17,6 +18,9 @@ const ProfileScreen = () => {
   const [phone,   setPhone]   = useState(userInfo?.phone   || '');
   const [address, setAddress] = useState(userInfo?.address || '');
   const [loading, setLoading] = useState(false);
+  const [deleteMode, setDeleteMode] = useState('password'); // password | otp
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteOtp, setDeleteOtp] = useState('');
 
   const initials = name ? name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() : '?';
 
@@ -32,7 +36,58 @@ const ProfileScreen = () => {
     }
   };
 
-  if (loading) return <LoadingSpinner message="Saving profile..." />;
+  const handleSendDeleteOtp = async () => {
+    setLoading(true);
+    try {
+      await requestPasswordResetOtpApi(email || userInfo?.email);
+      Alert.alert('OTP Sent', 'A 6-digit OTP was sent to your email.');
+    } catch (error) {
+      Alert.alert('Failed', error.response?.data?.message || 'Could not send OTP.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteMode === 'password' && !deletePassword) {
+      Alert.alert('Required', 'Please enter your password to delete account.');
+      return;
+    }
+    if (deleteMode === 'otp' && !deleteOtp) {
+      Alert.alert('Required', 'Please enter OTP to delete account.');
+      return;
+    }
+
+    Alert.alert(
+      'Delete Account',
+      'This action is permanent. Your account data will be removed.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setLoading(true);
+            try {
+              if (deleteMode === 'password') {
+                await deleteMyAccountApi({ password: deletePassword });
+              } else {
+                await deleteMyAccountApi({ otp: deleteOtp });
+              }
+              Alert.alert('Deleted', 'Your account has been deleted.');
+              await logout();
+            } catch (error) {
+              Alert.alert('Delete Failed', error.response?.data?.message || 'Please try again.');
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  if (loading) return <LoadingSpinner message="Please wait..." />;
 
   return (
     <View style={styles.root}>
@@ -66,6 +121,58 @@ const ProfileScreen = () => {
         </View>
 
         <CustomButton title="Save Changes" onPress={handleUpdate} style={styles.saveBtn} />
+
+        <Text style={styles.sectionLabel}>DELETE ACCOUNT</Text>
+        <View style={styles.deleteCard}>
+          <Text style={styles.deleteTitle}>Danger Zone</Text>
+          <Text style={styles.deleteSub}>
+            Delete your account using password, or use OTP if you forgot password.
+          </Text>
+
+          <View style={styles.toggleRow}>
+            <TouchableOpacity
+              style={[styles.toggleBtn, deleteMode === 'password' && styles.toggleBtnActive]}
+              onPress={() => setDeleteMode('password')}
+              activeOpacity={0.85}
+            >
+              <Text style={[styles.toggleText, deleteMode === 'password' && styles.toggleTextActive]}>Use Password</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.toggleBtn, deleteMode === 'otp' && styles.toggleBtnActive]}
+              onPress={() => setDeleteMode('otp')}
+              activeOpacity={0.85}
+            >
+              <Text style={[styles.toggleText, deleteMode === 'otp' && styles.toggleTextActive]}>Forgot Password (OTP)</Text>
+            </TouchableOpacity>
+          </View>
+
+          {deleteMode === 'password' ? (
+            <CustomInput
+              label="Password"
+              value={deletePassword}
+              onChangeText={setDeletePassword}
+              placeholder="Enter your current password"
+              secureTextEntry
+            />
+          ) : (
+            <>
+              <CustomInput
+                label="OTP"
+                value={deleteOtp}
+                onChangeText={(v) => setDeleteOtp(v.replace(/[^0-9]/g, ''))}
+                placeholder="Enter 6-digit OTP"
+                keyboardType="number-pad"
+              />
+              <TouchableOpacity style={styles.otpBtn} onPress={handleSendDeleteOtp} activeOpacity={0.85}>
+                <Text style={styles.otpBtnText}>Send OTP to Email</Text>
+              </TouchableOpacity>
+            </>
+          )}
+
+          <TouchableOpacity style={styles.deleteBtn} onPress={handleDeleteAccount} activeOpacity={0.85}>
+            <Text style={styles.deleteBtnText}>Delete My Account</Text>
+          </TouchableOpacity>
+        </View>
 
         <TouchableOpacity style={styles.logoutBtn} onPress={logout} activeOpacity={0.8}>
           <Text style={styles.logoutText}>Sign Out</Text>
@@ -116,6 +223,49 @@ const styles = StyleSheet.create({
     padding: 16, marginBottom: 16, ...SHADOW.card,
   },
   saveBtn:    { marginBottom: 10 },
+  deleteCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.lg,
+    padding: 16,
+    marginBottom: 16,
+    ...SHADOW.card,
+    borderWidth: 1,
+    borderColor: COLORS.dangerBg,
+  },
+  deleteTitle: { fontSize: 14, fontWeight: FONTS.bold, color: COLORS.danger, marginBottom: 4 },
+  deleteSub: { fontSize: 12, color: COLORS.textMuted, lineHeight: 18, marginBottom: 12 },
+  toggleRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  toggleBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.divider,
+    alignItems: 'center',
+    backgroundColor: COLORS.bgMuted,
+  },
+  toggleBtnActive: {
+    borderColor: COLORS.tealStrong,
+    backgroundColor: COLORS.tealFaint,
+  },
+  toggleText: { fontSize: 11, color: COLORS.textSecondary, fontWeight: FONTS.medium },
+  toggleTextActive: { color: COLORS.tealStrong, fontWeight: FONTS.bold },
+  otpBtn: {
+    borderRadius: RADIUS.md,
+    borderWidth: 1.2,
+    borderColor: COLORS.tealStrong,
+    alignItems: 'center',
+    paddingVertical: 10,
+    marginBottom: 10,
+  },
+  otpBtnText: { color: COLORS.tealStrong, fontSize: 12, fontWeight: FONTS.semibold },
+  deleteBtn: {
+    backgroundColor: COLORS.danger,
+    borderRadius: RADIUS.md,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  deleteBtnText: { color: COLORS.white, fontSize: 13, fontWeight: FONTS.bold },
   logoutBtn: {
     paddingVertical: 14, borderRadius: RADIUS.md,
     borderWidth: 1.5, borderColor: COLORS.danger, alignItems: 'center', marginTop: 6,

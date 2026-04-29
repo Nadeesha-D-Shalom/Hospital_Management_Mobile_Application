@@ -97,6 +97,10 @@ exports.updateAppointment = asyncHandler(async (req, res) => {
     return res.status(403).json({ message: 'Forbidden' });
   }
 
+  if (!isAdmin && appointment.status !== 'pending') {
+    return res.status(403).json({ message: 'Cannot modify appointment after approval or rejection' });
+  }
+
   const {
     doctorId,
     serviceId,
@@ -167,6 +171,10 @@ exports.deleteAppointment = asyncHandler(async (req, res) => {
 
   if (!isAdmin && !isOwner) {
     return res.status(403).json({ message: 'Forbidden' });
+  }
+
+  if (!isAdmin && appointment.status !== 'pending') {
+    return res.status(403).json({ message: 'Cannot delete appointment after approval or rejection' });
   }
 
   await appointment.deleteOne();

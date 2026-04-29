@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, Alert,
   TouchableOpacity, ScrollView,
 } from 'react-native';
-import { createAppointmentApi } from '../../api/appointmentApi';
+import { createAppointmentApi, updateAppointmentApi } from '../../api/appointmentApi';
 import { getServicesApi } from '../../api/serviceApi';
 import CustomInput from '../../components/CustomInput';
 import CustomButton from '../../components/CustomButton';
@@ -37,13 +37,22 @@ const getUpcomingDates = (days = 14) => {
 };
 
 const AppointmentBookingScreen = ({ route, navigation }) => {
-  const { doctor } = route.params;
+  const { doctor, appointment } = route.params || {};
+  const doctorData = doctor || appointment?.doctorId || {};
+  const isEdit = Boolean(appointment);
+
   const [services, setServices] = useState([]);
-  const [selectedServiceId, setSelectedServiceId] = useState('');
-  const [appointmentDate, setAppointmentDate] = useState(getTodayDate());
-  const [appointmentTime, setAppointmentTime] = useState('');
-  const [notes, setNotes] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState('cash'); // cash | card
+  const [selectedServiceId, setSelectedServiceId] = useState(
+    appointment?.serviceId?._id || appointment?.serviceId || ''
+  );
+  const [appointmentDate, setAppointmentDate] = useState(
+    appointment?.appointmentDate
+      ? new Date(appointment.appointmentDate).toISOString().split('T')[0]
+      : getTodayDate()
+  );
+  const [appointmentTime, setAppointmentTime] = useState(appointment?.appointmentTime || '');
+  const [notes, setNotes] = useState(appointment?.notes || '');
+  const [paymentMethod, setPaymentMethod] = useState(appointment?.paymentMethod || 'cash');
   const [loading, setLoading] = useState(false);
 
   const availableDates = getUpcomingDates(14);
@@ -66,22 +75,34 @@ const AppointmentBookingScreen = ({ route, navigation }) => {
   const isValidTime = (t) => /^\d{2}:\d{2}$/.test(String(t));
 
   const handleBook = async () => {
-    if (!doctor?._id) { Alert.alert('Error', 'Doctor info missing'); return; }
+    if (!doctorData?._id) { Alert.alert('Error', 'Doctor info missing'); return; }
     if (!selectedServiceId || !appointmentDate || !appointmentTime) { Alert.alert('Error', 'Please fill all required fields'); return; }
     if (!isValidDate(appointmentDate)) { Alert.alert('Error', 'Date must be YYYY-MM-DD'); return; }
     if (!isValidTime(appointmentTime)) { Alert.alert('Error', 'Time must be HH:MM'); return; }
 
     setLoading(true);
     try {
-      await createAppointmentApi({
-        doctorId: doctor._id,
-        serviceId: selectedServiceId,
-        appointmentDate,
-        appointmentTime,
-        notes,
-        paymentMethod,
-      });
-      Alert.alert('Appointment Booked', 'Your appointment has been successfully scheduled.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
+      if (isEdit && appointment?._id) {
+        await updateAppointmentApi(appointment._id, {
+          doctorId: doctorData._id,
+          serviceId: selectedServiceId,
+          appointmentDate,
+          appointmentTime,
+          notes,
+          paymentMethod,
+        });
+        Alert.alert('Appointment Updated', 'Your appointment has been updated successfully.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
+      } else {
+        await createAppointmentApi({
+          doctorId: doctorData._id,
+          serviceId: selectedServiceId,
+          appointmentDate,
+          appointmentTime,
+          notes,
+          paymentMethod,
+        });
+        Alert.alert('Appointment Booked', 'Your appointment has been successfully scheduled.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
+      }
     } catch (error) {
       Alert.alert('Booking Failed', error.response?.data?.message || 'Please try again.');
     } finally {
@@ -94,8 +115,8 @@ const AppointmentBookingScreen = ({ route, navigation }) => {
   return (
     <View style={styles.root}>
       <ScreenHeader
-        title="Book Appointment"
-        subtitle={`with ${doctor.name}`}
+        title={isEdit ? 'Edit Appointment' : 'Book Appointment'}
+        subtitle={`with ${doctorData.name || 'Doctor'}`}
         onBack={() => navigation.goBack()}
       />
 
@@ -104,12 +125,12 @@ const AppointmentBookingScreen = ({ route, navigation }) => {
         {/* Doctor summary */}
         <View style={styles.doctorCard}>
           <View style={styles.doctorAvatar}>
-            <Text style={styles.doctorAvatarText}>{doctor.name?.charAt(0)?.toUpperCase()}</Text>
+            <Text style={styles.doctorAvatarText}>{doctorData.name?.charAt(0)?.toUpperCase()}</Text>
           </View>
           <View style={styles.doctorText}>
-            <Text style={styles.doctorName}>{doctor.name}</Text>
-            <Text style={styles.doctorSpec}>{doctor.specialization}</Text>
-            <Text style={styles.doctorFee}>${doctor.consultationFee} consultation</Text>
+            <Text style={styles.doctorName}>{doctorData.name}</Text>
+            <Text style={styles.doctorSpec}>{doctorData.specialization}</Text>
+            <Text style={styles.doctorFee}>${doctorData.consultationFee} consultation</Text>
           </View>
         </View>
 
