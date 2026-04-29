@@ -1,6 +1,7 @@
 const Complaint = require('../models/complaint.model');
 const asyncHandler = require('../utils/asyncHandler');
 
+// ---------------- CREATE ----------------
 exports.createComplaint = asyncHandler(async (req, res) => {
   const { subject, message } = req.body;
 
@@ -12,11 +13,13 @@ exports.createComplaint = asyncHandler(async (req, res) => {
     userId: req.user._id,
     subject,
     message,
+    status: 'open',
   });
 
   res.status(201).json(complaint);
 });
 
+// ---------------- UPDATE ----------------
 exports.updateComplaint = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { subject, message } = req.body;
@@ -26,34 +29,40 @@ exports.updateComplaint = asyncHandler(async (req, res) => {
 
   const isAdmin = req.user.role === 'admin';
   const isOwner = complaint.userId.toString() === req.user._id.toString();
-  if (!isAdmin && !isOwner) return res.status(403).json({ message: 'Forbidden' });
+
+  if (!isAdmin && !isOwner) {
+    return res.status(403).json({ message: 'Forbidden' });
+  }
 
   if (subject !== undefined) complaint.subject = subject;
   if (message !== undefined) complaint.message = message;
-
-  if (!complaint.subject || !complaint.message) {
-    return res.status(400).json({ message: 'Subject and message are required' });
-  }
 
   await complaint.save();
   res.status(200).json(complaint);
 });
 
+// ---------------- GET ALL ----------------
 exports.getComplaints = asyncHandler(async (req, res) => {
-  // Patients should only see complaints after admin has replied.
-  // We key off adminReply presence (not only status), because UI may set intermediate statuses.
-  const filter =
-    req.user.role === 'admin'
-      ? {}
-      : {
-          userId: req.user._id,
-          adminReply: { $exists: true, $ne: '' },
-        };
+  let complaints;
 
-  const complaints = await Complaint.find(filter).populate('userId', '-password');
+  if (req.user.role === 'admin') {
+    // Admin sees all complaints
+    complaints = await Complaint.find()
+      .populate('userId', '-password')
+      .sort({ createdAt: -1 });
+  } else {
+    // User sees ALL their complaints (FIXED HERE)
+    complaints = await Complaint.find({
+      userId: req.user._id,
+    })
+      .populate('userId', '-password')
+      .sort({ createdAt: -1 });
+  }
+
   res.status(200).json(complaints);
 });
 
+// ---------------- GET ONE ----------------
 exports.getComplaintById = asyncHandler(async (req, res) => {
   const complaint = await Complaint.findById(req.params.id).populate('userId', '-password');
 
@@ -61,57 +70,62 @@ exports.getComplaintById = asyncHandler(async (req, res) => {
     return res.status(404).json({ message: 'Complaint not found' });
   }
 
-  if (req.user.role !== 'admin' && complaint.userId._id.toString() !== req.user._id.toString()) {
-    return res.status(403).json({ message: 'Forbidden' });
-  }
-
   if (
     req.user.role !== 'admin' &&
-    (!complaint.adminReply || String(complaint.adminReply).trim().length === 0)
+    complaint.userId._id.toString() !== req.user._id.toString()
   ) {
-    return res.status(404).json({ message: 'Complaint not found' });
+    return res.status(403).json({ message: 'Forbidden' });
   }
 
   res.status(200).json(complaint);
 });
 
+// ---------------- UPDATE STATUS ----------------
 exports.updateComplaintStatus = asyncHandler(async (req, res) => {
   const complaint = await Complaint.findById(req.params.id);
+
   if (!complaint) {
     return res.status(404).json({ message: 'Complaint not found' });
   }
 
-  if (req.user.role !== 'admin') return res.status(403).json({ message: 'Forbidden' });
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ message: 'Forbidden' });
+  }
 
   const { status, adminReply } = req.body;
+
   const allowed = ['open', 'in_progress', 'resolved'];
   if (status && !allowed.includes(status)) {
     return res.status(400).json({ message: 'Invalid status' });
   }
 
-  if (status === 'resolved') {
-    if (adminReply === undefined || String(adminReply).trim().length === 0) {
-      return res.status(400).json({ message: 'adminReply is required when resolving a complaint' });
-    }
+  complaint.status = status || complaint.status;
+
+  if (adminReply !== undefined) {
+    complaint.adminReply = adminReply;
   }
 
-  complaint.status = status || complaint.status;
-  if (adminReply !== undefined) complaint.adminReply = adminReply;
   await complaint.save();
 
   res.status(200).json(complaint);
 });
 
+// ---------------- DELETE ----------------
 exports.deleteComplaint = asyncHandler(async (req, res) => {
   const complaint = await Complaint.findById(req.params.id);
+
   if (!complaint) {
     return res.status(404).json({ message: 'Complaint not found' });
   }
 
-  if (req.user.role !== 'admin' && complaint.userId.toString() !== req.user._id.toString()) {
+  const isAdmin = req.user.role === 'admin';
+  const isOwner = complaint.userId.toString() === req.user._id.toString();
+
+  if (!isAdmin && !isOwner) {
     return res.status(403).json({ message: 'Forbidden' });
   }
 
-  await complaint.remove();
+  await complaint.deleteOne();
+
   res.status(200).json({ message: 'Complaint deleted successfully' });
 });

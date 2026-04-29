@@ -10,64 +10,70 @@ import { AuthContext } from '../../context/AuthContext';
 import { COLORS, FONTS, RADIUS } from '../../theme';
 import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 
-const ComplaintListScreen = ({ navigation }) => {
-  const [complaints,      setComplaints]      = useState([]);
-  const [loading,         setLoading]         = useState(true);
-  const [adminReply,      setAdminReply]      = useState('');
+const ComplaintListScreen = ({ navigation, route }) => {
+  const [complaints, setComplaints] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [adminReply, setAdminReply] = useState('');
   const [actionLoadingId, setActionLoadingId] = useState(null);
+
   const { userInfo } = useContext(AuthContext);
   const isAdmin = userInfo?.role === 'admin';
   const isFocused = useIsFocused();
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await getComplaintsApi();
-        setComplaints(res.data);
-      } catch (e) { console.error(e); }
-      finally { setLoading(false); }
-    })();
-  }, []);
-
-  const refreshComplaints = useCallback(async () => {
-    setLoading(true);
+  // ---------------- FETCH ----------------
+  const fetchComplaints = async () => {
     try {
       const res = await getComplaintsApi();
       setComplaints(res.data);
     } catch (e) {
       console.error(e);
-      Alert.alert('Error', e?.response?.data?.message || 'Failed to load complaints');
+      Alert.alert('Error', 'Failed to load complaints');
     } finally {
       setLoading(false);
     }
+  };
+
+  useEffect(() => {
+    fetchComplaints();
   }, []);
 
+  // ---------------- REFRESH ON SCREEN BACK ----------------
   useFocusEffect(
     useCallback(() => {
-      refreshComplaints();
-    }, [refreshComplaints])
+      fetchComplaints();
+    }, [])
   );
 
-  // Polling so patients see admin replies even if the screen stays open.
+  // ---------------- INSTANT ADD AFTER CREATE ----------------
   useEffect(() => {
-    if (!isFocused) return undefined;
-    const intervalId = setInterval(() => {
-      refreshComplaints();
-    }, 15000);
+    if (route?.params?.newComplaint) {
+      setComplaints((prev) => [route.params.newComplaint, ...prev]);
+    }
+  }, [route?.params?.newComplaint]);
 
-    return () => clearInterval(intervalId);
-  }, [isFocused, refreshComplaints]);
+  // ---------------- POLLING ----------------
+  useEffect(() => {
+    if (!isFocused) return;
 
+    const interval = setInterval(fetchComplaints, 10000);
+    return () => clearInterval(interval);
+  }, [isFocused]);
+
+  // ---------------- STATUS UPDATE ----------------
   const handleStatusUpdate = async (id, nextStatus) => {
     setActionLoadingId(id);
     try {
       await updateComplaintStatusApi(id, nextStatus, adminReply || undefined);
+
       setComplaints((prev) =>
-        prev.map((c) => (c._id === id ? { ...c, status: nextStatus } : c))
+        prev.map((c) =>
+          c._id === id ? { ...c, status: nextStatus } : c
+        )
       );
-      Alert.alert('Updated', `Complaint marked as ${nextStatus.replace('_', ' ')}`);
+
+      Alert.alert('Updated', `Marked as ${nextStatus}`);
     } catch (error) {
-      Alert.alert('Error', error.response?.data?.message || 'Update failed');
+      Alert.alert('Error', 'Update failed');
     } finally {
       setActionLoadingId(null);
     }
@@ -84,7 +90,6 @@ const ComplaintListScreen = ({ navigation }) => {
           <TouchableOpacity
             style={styles.newBtn}
             onPress={() => navigation.navigate('ComplaintForm')}
-            activeOpacity={0.8}
           >
             <Text style={styles.newBtnText}>+ New</Text>
           </TouchableOpacity>
@@ -95,47 +100,30 @@ const ComplaintListScreen = ({ navigation }) => {
         data={complaints}
         keyExtractor={(item) => item._id}
         contentContainerStyle={styles.list}
-        showsVerticalScrollIndicator={false}
-        ListHeaderComponent={
-          isAdmin ? (
-            <View style={styles.replyBox}>
-              <Text style={styles.replyBoxLabel}>ADMIN REPLY (applied to next action)</Text>
-              <CustomInput
-                value={adminReply}
-                onChangeText={setAdminReply}
-                placeholder="Write a reply for the patient..."
-                multiline
-                numberOfLines={3}
-              />
-            </View>
-          ) : null
-        }
         ListEmptyComponent={
-          <EmptyState message="No complaints found" subtitle="All clear — no submissions yet" />
+          <EmptyState message="No complaints found" />
         }
         renderItem={({ item }) => (
           <View>
             <ComplaintCard complaint={item} />
-            {isAdmin ? (
+
+            {isAdmin && (
               <View style={styles.adminActions}>
                 <TouchableOpacity
                   style={[styles.actionBtn, styles.progressBtn]}
-                  disabled={actionLoadingId === item._id}
-                  activeOpacity={0.8}
                   onPress={() => handleStatusUpdate(item._id, 'in_progress')}
                 >
                   <Text style={styles.actionBtnText}>In Progress</Text>
                 </TouchableOpacity>
+
                 <TouchableOpacity
                   style={[styles.actionBtn, styles.resolvedBtn]}
-                  disabled={actionLoadingId === item._id}
-                  activeOpacity={0.8}
                   onPress={() => handleStatusUpdate(item._id, 'resolved')}
                 >
                   <Text style={styles.actionBtnText}>Resolved</Text>
                 </TouchableOpacity>
               </View>
-            ) : null}
+            )}
           </View>
         )}
       />
@@ -145,33 +133,40 @@ const ComplaintListScreen = ({ navigation }) => {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.bgPage },
-  list: { paddingTop: 12, paddingBottom: 30 },
+  list: { padding: 12 },
+
   newBtn: {
     backgroundColor: COLORS.tealBright,
-    paddingHorizontal: 14, paddingVertical: 7,
-    borderRadius: RADIUS.full,
+    padding: 10,
+    borderRadius: 20,
   },
-  newBtnText: { color: COLORS.white, fontSize: 13, fontWeight: FONTS.bold },
 
-  replyBox: {
-    marginHorizontal: 16, marginBottom: 8,
-    backgroundColor: COLORS.white, borderRadius: RADIUS.lg,
-    padding: 14,
-    shadowColor: COLORS.tealStrong, shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.07, shadowRadius: 8, elevation: 3,
+  newBtnText: {
+    color: '#fff',
+    fontWeight: 'bold',
   },
-  replyBoxLabel: { fontSize: 10, fontWeight: FONTS.bold, color: COLORS.tealBright, letterSpacing: 1.5, marginBottom: 8 },
 
   adminActions: {
-    flexDirection: 'row', gap: 10,
-    paddingHorizontal: 16, paddingBottom: 10, paddingTop: 4,
+    flexDirection: 'row',
+    marginHorizontal: 16,
+    marginBottom: 10,
+    gap: 10,
   },
+
   actionBtn: {
-    flex: 1, paddingVertical: 11, borderRadius: RADIUS.md, alignItems: 'center',
+    flex: 1,
+    padding: 10,
+    borderRadius: 10,
+    alignItems: 'center',
   },
-  progressBtn:   { backgroundColor: COLORS.warning },
-  resolvedBtn:   { backgroundColor: COLORS.success },
-  actionBtnText: { color: COLORS.white, fontSize: 13, fontWeight: FONTS.bold },
+
+  progressBtn: { backgroundColor: 'orange' },
+  resolvedBtn: { backgroundColor: 'green' },
+
+  actionBtnText: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
 });
 
 export default ComplaintListScreen;
