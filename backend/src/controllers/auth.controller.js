@@ -102,16 +102,50 @@ exports.requestPasswordResetOtp = asyncHandler(async (req, res) => {
   const hashedOtp = await bcrypt.hash(otp, 10);
 
   user.resetPasswordOtpHash = hashedOtp;
-  user.resetPasswordOtpExpiresAt = new Date(Date.now() + 60 * 1000); // 1 minute validity
+  user.resetPasswordOtpExpiresAt = new Date(Date.now() + 2 * 60 * 1000); // 1 minute validity
   user.resetPasswordOtpVerified = false;
   await user.save();
 
-  await sendEmail({
-    to: user.email,
-    subject: 'Your password reset OTP',
-    text: `Your OTP is ${otp}. It will expire in 1 minute.`,
-    html: `<p>Your OTP is <b>${otp}</b>. It will expire in <b>1 minute</b>.</p>`,
-  });
+
+await sendEmail({
+  to: user.email,
+  subject: 'Password Reset OTP - Hospital App',
+  text: `Dear User,
+
+We received a request to reset your password.
+
+Your One-Time Password (OTP) is: ${otp}
+
+This OTP is valid for 1 minute. Please do not share this code with anyone.
+
+If you did not request this, please ignore this email.
+
+Regards,  
+Hospital App Team`,
+  
+  html: `
+    <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+      <h2 style="color: #2c3e50;">Password Reset Request</h2>
+      
+      <p>Dear User,</p>
+      
+      <p>We received a request to reset your password.</p>
+      
+      <p>
+        Your One-Time Password (OTP) is:
+        <strong style="font-size: 18px; color: #e74c3c;">${otp}</strong>
+      </p>
+      
+      <p>This OTP is valid for <strong>2 minute</strong>. Please do not share this code with anyone.</p>
+      
+      <p>If you did not request this, please ignore this email.</p>
+      
+      <br/>
+      
+      <p>Regards,<br/><strong>Hospital App Team</strong></p>
+    </div>
+  `,
+});
 
   res.status(200).json({
     message: 'OTP sent to email. OTP is valid for 1 minute.',
