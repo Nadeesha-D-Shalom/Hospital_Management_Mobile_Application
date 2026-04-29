@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const User = require('../models/user.model');
 const generateToken = require('../utils/generateToken');
 const asyncHandler = require('../utils/asyncHandler');
-const { sendEmail } = require('../utils/email');
+const { sendEmail, renderEmailTemplate } = require('../utils/email');
 
 exports.registerUser = asyncHandler(async (req, res) => {
   const { name, email } = req.body;
@@ -57,7 +57,7 @@ exports.registerUser = asyncHandler(async (req, res) => {
   // Send OTP email
   await sendEmail({
     to: normalizedEmail,
-    subject: 'Email Verification OTP - Hospital App',
+    subject: 'Verify your email - Olympus Lanka Hospital',
     text: `Dear ${name},
 
 Thank you for registering with us.
@@ -67,28 +67,16 @@ Your Email Verification OTP is: ${otp}
 This OTP is valid for 2 minutes. Please do not share this code with anyone.
 
 Regards,  
-Hospital App Team`,
-    
-    html: `
-      <div style="font-family: Arial, sans-serif; line-height: 1.6;">
-        <h2 style="color: #2c3e50;">Email Verification</h2>
-        
-        <p>Dear ${name},</p>
-        
-        <p>Thank you for registering with us.</p>
-        
-        <p>
-          Your Email Verification OTP is:
-          <strong style="font-size: 18px; color: #e74c3c;">${otp}</strong>
-        </p>
-        
-        <p>This OTP is valid for <strong>2 minutes</strong>. Please do not share this code with anyone.</p>
-        
-        <br/>
-        
-        <p>Regards,<br/><strong>Hospital App Team</strong></p>
-      </div>
-    `,
+Olympus Lanka Hospital`,
+    html: renderEmailTemplate({
+      title: 'Verify Your Email',
+      preheader: 'Your Olympus Lanka Hospital verification code expires in 2 minutes.',
+      greeting: `Dear ${name},`,
+      intro: 'Thank you for registering with Olympus Lanka Hospital. Use this one-time password to verify your email address.',
+      highlight: { label: 'Verification OTP', value: otp },
+      note: 'This OTP is valid for 2 minutes. Please do not share this code with anyone.',
+      actionText: 'After verification, you can create your password and finish registration.',
+    }),
   });
 
   res.status(200).json({
@@ -244,7 +232,7 @@ exports.requestPasswordResetOtp = asyncHandler(async (req, res) => {
 
 await sendEmail({
   to: user.email,
-  subject: 'Password Reset OTP - Hospital App',
+  subject: 'Password reset OTP - Olympus Lanka Hospital',
   text: `Dear User,
 
 We received a request to reset your password.
@@ -256,30 +244,15 @@ This OTP is valid for 2 minutes. Please do not share this code with anyone.
 If you did not request this, please ignore this email.
 
 Regards,  
-Hospital App Team`,
-  
-  html: `
-    <div style="font-family: Arial, sans-serif; line-height: 1.6;">
-      <h2 style="color: #2c3e50;">Password Reset Request</h2>
-      
-      <p>Dear User,</p>
-      
-      <p>We received a request to reset your password.</p>
-      
-      <p>
-        Your One-Time Password (OTP) is:
-        <strong style="font-size: 18px; color: #e74c3c;">${otp}</strong>
-      </p>
-      
-      <p>This OTP is valid for <strong>2 minutes</strong>. Please do not share this code with anyone.</p>
-      
-      <p>If you did not request this, please ignore this email.</p>
-      
-      <br/>
-      
-      <p>Regards,<br/><strong>Hospital App Team</strong></p>
-    </div>
-  `,
+Olympus Lanka Hospital`,
+  html: renderEmailTemplate({
+    title: 'Password Reset Request',
+    preheader: 'Your password reset OTP expires in 2 minutes.',
+    greeting: 'Dear User,',
+    intro: 'We received a request to reset your password. Use this one-time password to continue.',
+    highlight: { label: 'Reset OTP', value: otp },
+    note: 'This OTP is valid for 2 minutes. If you did not request this, you can safely ignore this email.',
+  }),
 });
 
   res.status(200).json({

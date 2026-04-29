@@ -335,7 +335,7 @@ const AppointmentDetailsScreen = ({ route, navigation }) => {
         {/* Action buttons */}
         {canModify || isAdmin ? (
           <View style={styles.actionRow}>
-            {canModify ? (
+            {canModify || isAdmin ? (
               <TouchableOpacity style={[styles.actionBtn, styles.editBtn]} onPress={handleEdit} activeOpacity={0.85}>
                 <Text style={styles.actionBtnText}>Edit Appointment</Text>
               </TouchableOpacity>

@@ -3,7 +3,7 @@ const Doctor = require('../models/doctor.model');
 const Service = require('../models/service.model');
 const AppointmentReport = require('../models/appointmentReport.model');
 const asyncHandler = require('../utils/asyncHandler');
-const { sendEmail } = require('../utils/email');
+const { sendEmail, renderEmailTemplate } = require('../utils/email');
 
 const getDayRangeUTC = (dateValue) => {
   const d = new Date(dateValue);
@@ -295,16 +295,22 @@ exports.updateAppointmentStatus = asyncHandler(async (req, res) => {
           `Amount to pay: LKR ${amount}\n` +
           `Payment method: ${method}\n\n` +
           `Thank you,\nOlympus Lanka Hospital`,
-        html:
-          `<p>Hello <b>${updated.userId.name}</b>,</p>` +
-          `<p>Your appointment has been approved.</p>` +
-          `<ul>` +
-          `<li><b>Doctor:</b> ${updated?.doctorId?.name || 'N/A'}</li>` +
-          `<li><b>Service:</b> ${updated?.serviceId?.serviceName || 'N/A'}</li>` +
-          `<li><b>Date & Time:</b> ${dateStr} at ${updated.appointmentTime}</li>` +
-          `<li><b>Amount to pay:</b> LKR ${amount}</li>` +
-          `<li><b>Payment method:</b> ${method}</li>` +
-          `</ul>`,
+        html: renderEmailTemplate({
+          title: 'Appointment Confirmed',
+          preheader: `Your appointment is approved for ${dateStr} at ${updated.appointmentTime}.`,
+          greeting: `Hello ${updated.userId.name},`,
+          intro: 'Your appointment has been approved. Please review the confirmed appointment details below.',
+          details: [
+            { label: 'Doctor', value: updated?.doctorId?.name || 'N/A' },
+            { label: 'Service', value: updated?.serviceId?.serviceName || 'N/A' },
+            { label: 'Date', value: dateStr },
+            { label: 'Time', value: updated.appointmentTime },
+            { label: 'Amount to pay', value: `LKR ${amount}` },
+            { label: 'Payment method', value: method },
+          ],
+          note: 'Please arrive a few minutes early and bring any relevant medical documents.',
+          actionText: 'Thank you for choosing Olympus Lanka Hospital.',
+        }),
       });
     } catch (e) {
       console.error('Failed to send appointment approval email:', e?.message || e);

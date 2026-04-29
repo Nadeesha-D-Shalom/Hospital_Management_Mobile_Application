@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useContext, useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, Alert,
   TouchableOpacity, ScrollView,
@@ -7,6 +7,7 @@ import { createAppointmentApi, getAppointmentAvailabilityApi, updateAppointmentA
 import { getServicesApi } from '../../api/serviceApi';
 import { createReportApi, getReportsByAppointmentApi, updateReportApi } from '../../api/appointmentReportApi';
 import { uploadAppointmentReportFileApi } from '../../api/uploadApi';
+import { AuthContext } from '../../context/AuthContext';
 import CustomInput from '../../components/CustomInput';
 import CustomButton from '../../components/CustomButton';
 import LoadingSpinner from '../../components/LoadingSpinner';
@@ -42,8 +43,11 @@ const getUpcomingDates = (days = 14) => {
 
 const AppointmentBookingScreen = ({ route, navigation }) => {
   const { doctor, appointment } = route.params || {};
+  const { userInfo } = useContext(AuthContext);
   const doctorData = doctor || appointment?.doctorId || {};
   const isEdit = Boolean(appointment);
+  const isAdmin = userInfo?.role === 'admin';
+  const canAddAppointmentReport = !isAdmin;
 
   const [services, setServices] = useState([]);
   const [selectedServiceId, setSelectedServiceId] = useState(
@@ -238,11 +242,11 @@ const AppointmentBookingScreen = ({ route, navigation }) => {
       Alert.alert('Slot Unavailable', 'Please select another time slot.');
       return;
     }
-    if (addReport && (!reportType.trim() || !reportDescription.trim())) {
+    if (canAddAppointmentReport && addReport && (!reportType.trim() || !reportDescription.trim())) {
       Alert.alert('Missing Report Details', 'Please enter report type and details.');
       return;
     }
-    if (addReport && !selectedFile && !existingFileName) {
+    if (canAddAppointmentReport && addReport && !selectedFile && !existingFileName) {
       Alert.alert('Missing Report File', 'Please upload the report as an image or PDF.');
       return;
     }
@@ -258,7 +262,7 @@ const AppointmentBookingScreen = ({ route, navigation }) => {
           notes,
           paymentMethod,
         });
-        await saveAppointmentReport(appointment._id);
+        if (canAddAppointmentReport) await saveAppointmentReport(appointment._id);
         Alert.alert('Appointment Updated', 'Your appointment has been updated successfully.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
       } else {
         const res = await createAppointmentApi({
@@ -269,7 +273,7 @@ const AppointmentBookingScreen = ({ route, navigation }) => {
           notes,
           paymentMethod,
         });
-        await saveAppointmentReport(res.data._id);
+        if (canAddAppointmentReport) await saveAppointmentReport(res.data._id);
         Alert.alert('Appointment Booked', 'Your appointment has been successfully scheduled.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
       }
     } catch (error) {
@@ -399,51 +403,55 @@ const AppointmentBookingScreen = ({ route, navigation }) => {
           <CustomInput label="Notes (optional)" value={notes} onChangeText={setNotes} placeholder="Any special instructions..." multiline numberOfLines={3} />
         </View>
 
-        <Text style={styles.sectionLabel}>REPORTS (OPTIONAL)</Text>
-        <View style={styles.reportCard}>
-          <TouchableOpacity
-            style={[styles.methodItem, addReport && styles.methodItemSelected]}
-            onPress={() => setAddReport((prev) => !prev)}
-            activeOpacity={0.85}
-          >
-            <Text style={[styles.methodTitle, addReport && styles.methodTitleSelected]}>Add Report</Text>
-            <View style={[styles.radio, addReport && styles.radioSelected]}>
-              {addReport ? <View style={styles.radioDot} /> : null}
-            </View>
-          </TouchableOpacity>
+        {canAddAppointmentReport ? (
+          <>
+            <Text style={styles.sectionLabel}>REPORTS (OPTIONAL)</Text>
+            <View style={styles.reportCard}>
+              <TouchableOpacity
+                style={[styles.methodItem, addReport && styles.methodItemSelected]}
+                onPress={() => setAddReport((prev) => !prev)}
+                activeOpacity={0.85}
+              >
+                <Text style={[styles.methodTitle, addReport && styles.methodTitleSelected]}>Add Report</Text>
+                <View style={[styles.radio, addReport && styles.radioSelected]}>
+                  {addReport ? <View style={styles.radioDot} /> : null}
+                </View>
+              </TouchableOpacity>
 
-          {addReport ? (
-            <View style={styles.reportForm}>
-              <CustomInput
-                label="Report Type"
-                value={reportType}
-                onChangeText={setReportType}
-                placeholder="e.g. ECG, blood, scan, other"
-              />
-              <CustomInput
-                label="Report Details"
-                value={reportDescription}
-                onChangeText={setReportDescription}
-                placeholder="Describe what the report is about"
-                multiline
-                numberOfLines={3}
-              />
-              <View style={styles.fileRow}>
-                <TouchableOpacity style={styles.fileBtn} onPress={pickImageFile}>
-                  <Text style={styles.fileBtnText}>Upload Image</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.fileBtn} onPress={pickPdfFile}>
-                  <Text style={styles.fileBtnText}>Upload PDF</Text>
-                </TouchableOpacity>
-              </View>
-              {selectedFile ? (
-                <Text style={styles.fileInfo}>Selected: {selectedFile.name}</Text>
-              ) : existingFileName ? (
-                <Text style={styles.fileInfo}>Current file: {existingFileName}</Text>
+              {addReport ? (
+                <View style={styles.reportForm}>
+                  <CustomInput
+                    label="Report Type"
+                    value={reportType}
+                    onChangeText={setReportType}
+                    placeholder="e.g. ECG, blood, scan, other"
+                  />
+                  <CustomInput
+                    label="Report Details"
+                    value={reportDescription}
+                    onChangeText={setReportDescription}
+                    placeholder="Describe what the report is about"
+                    multiline
+                    numberOfLines={3}
+                  />
+                  <View style={styles.fileRow}>
+                    <TouchableOpacity style={styles.fileBtn} onPress={pickImageFile}>
+                      <Text style={styles.fileBtnText}>Upload Image</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.fileBtn} onPress={pickPdfFile}>
+                      <Text style={styles.fileBtnText}>Upload PDF</Text>
+                    </TouchableOpacity>
+                  </View>
+                  {selectedFile ? (
+                    <Text style={styles.fileInfo}>Selected: {selectedFile.name}</Text>
+                  ) : existingFileName ? (
+                    <Text style={styles.fileInfo}>Current file: {existingFileName}</Text>
+                  ) : null}
+                </View>
               ) : null}
             </View>
-          ) : null}
-        </View>
+          </>
+        ) : null}
 
         {/* Payment method selection (stored with appointment; actual payment only after approval) */}
         <Text style={styles.sectionLabel}>SELECT PAYMENT METHOD</Text>

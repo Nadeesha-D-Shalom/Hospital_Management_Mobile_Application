@@ -4,6 +4,18 @@ import { COLORS, FONTS, RADIUS, SHADOW, statusColor } from '../theme';
 
 const AppointmentCard = ({ appointment, onPress }) => {
   const sc = statusColor(appointment.status);
+  const duration = Number(appointment.serviceId?.duration) || 30;
+  const getEndTime = () => {
+    if (!appointment.appointmentTime || !/^\d{2}:\d{2}$/.test(appointment.appointmentTime)) {
+      return '';
+    }
+    const [hours, minutes] = appointment.appointmentTime.split(':').map(Number);
+    const total = hours * 60 + minutes + duration;
+    const endHours = Math.floor(total / 60).toString().padStart(2, '0');
+    const endMinutes = (total % 60).toString().padStart(2, '0');
+    return `${endHours}:${endMinutes}`;
+  };
+  const endTime = getEndTime();
 
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.88}>
@@ -34,7 +46,10 @@ const AppointmentCard = ({ appointment, onPress }) => {
           <View style={styles.metaDivider} />
           <View style={styles.metaItem}>
             <Text style={styles.metaLabel}>Time</Text>
-            <Text style={styles.metaValue}>{appointment.appointmentTime}</Text>
+            <Text style={styles.metaValue}>
+              {appointment.appointmentTime}{endTime ? ` - ${endTime}` : ''}
+            </Text>
+            <Text style={styles.durationText}>{duration} min service</Text>
           </View>
         </View>
       </View>
@@ -106,6 +121,12 @@ const styles = StyleSheet.create({
   metaValue: {
     fontSize: 13,
     color: COLORS.textPrimary,
+    fontWeight: FONTS.medium,
+  },
+  durationText: {
+    fontSize: 10,
+    color: COLORS.textMuted,
+    marginTop: 2,
     fontWeight: FONTS.medium,
   },
   metaDivider: {
