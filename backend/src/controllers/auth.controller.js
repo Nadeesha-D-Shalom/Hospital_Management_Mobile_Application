@@ -99,19 +99,11 @@ Hospital App Team`,
 });
 
 exports.verifyEmailOtp = asyncHandler(async (req, res) => {
-  const { email, otp, password, confirmPassword } = req.body;
+  const { email, otp } = req.body;
   const normalizedEmail = String(email || '').trim().toLowerCase();
 
-  if (!normalizedEmail || !otp || !password) {
-    return res.status(400).json({ message: 'Email, OTP, and password are required' });
-  }
-
-  if (confirmPassword !== undefined && password !== confirmPassword) {
-    return res.status(400).json({ message: 'Passwords do not match' });
-  }
-
-  if (String(password).length < 6) {
-    return res.status(400).json({ message: 'Password must be at least 6 characters' });
+  if (!normalizedEmail || !otp) {
+    return res.status(400).json({ message: 'Email and OTP are required' });
   }
 
   const user = await User.findOne({ email: normalizedEmail });
@@ -132,16 +124,50 @@ exports.verifyEmailOtp = asyncHandler(async (req, res) => {
   }
 
   user.emailVerified = true;
-  const salt = await bcrypt.genSalt(10);
-  user.password = await bcrypt.hash(password, salt);
   user.emailVerificationOtpHash = undefined;
   user.emailVerificationOtpExpiresAt = undefined;
+  await user.save();
+
+  res.status(200).json({
+    message: 'Email verified successfully. Please create your password.',
+    email: user.email,
+    canCreatePassword: true,
+  });
+});
+
+exports.completeRegistration = asyncHandler(async (req, res) => {
+  const { email, password, confirmPassword } = req.body;
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+
+  if (!normalizedEmail || !password || !confirmPassword) {
+    return res.status(400).json({ message: 'Email, password, and confirm password are required' });
+  }
+
+  if (password !== confirmPassword) {
+    return res.status(400).json({ message: 'Passwords do not match' });
+  }
+
+  if (String(password).length < 6) {
+    return res.status(400).json({ message: 'Password must be at least 6 characters' });
+  }
+
+  const user = await User.findOne({ email: normalizedEmail });
+  if (!user) {
+    return res.status(404).json({ message: 'User not found' });
+  }
+
+  if (!user.emailVerified) {
+    return res.status(403).json({ message: 'Please verify your email before creating a password' });
+  }
+
+  const salt = await bcrypt.genSalt(10);
+  user.password = await bcrypt.hash(password, salt);
   await user.save();
 
   const token = generateToken(user._id);
 
   res.status(200).json({
-    message: 'Email verified successfully. Account created.',
+    message: 'Account created successfully.',
     token,
     _id: user._id,
     name: user.name,
@@ -166,8 +192,8 @@ exports.loginUser = asyncHandler(async (req, res) => {
     return res.status(401).json({ message: 'Invalid credentials' });
   }
 
-  if (!user.emailVerified) {
-    return res.status(403).json({ message: 'Please verify your email before logging in' });
+  if (!user.password) {
+    return res.status(401).json({ message: 'Password is not set for this account' });
   }
 
   const isMatch = await bcrypt.compare(password, user.password);

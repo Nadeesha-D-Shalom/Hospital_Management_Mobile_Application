@@ -8,17 +8,13 @@ import CustomInput from '../../components/CustomInput';
 import CustomButton from '../../components/CustomButton';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { COLORS, FONTS, RADIUS, SHADOW } from '../../theme';
-import { validateEmail, validatePassword } from '../../utils/validators';
+import { validateEmail } from '../../utils/validators';
 
 const RegisterScreen = ({ navigation }) => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [otp, setOtp] = useState('');
-  const [otpStep, setOtpStep] = useState(false);
   const [loading, setLoading] = useState(false);
-  const { register, verifyEmailOtp } = useContext(AuthContext);
+  const { register } = useContext(AuthContext);
 
   const slideAnim = useRef(new Animated.Value(40)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -42,8 +38,10 @@ const RegisterScreen = ({ navigation }) => {
     setLoading(true);
     try {
       await register(name.trim(), email.trim().toLowerCase());
-      setOtpStep(true);
-      Alert.alert('OTP Sent', 'We sent a verification OTP to your email. It is valid for 2 minutes.');
+      navigation.navigate('VerifyEmailOtp', {
+        name: name.trim(),
+        email: email.trim().toLowerCase(),
+      });
     } catch (error) {
       Alert.alert('Registration Failed', error.response?.data?.message || 'Please try again.');
     } finally {
@@ -51,31 +49,7 @@ const RegisterScreen = ({ navigation }) => {
     }
   };
 
-  const handleVerifyOtp = async () => {
-    if (!otp) {
-      Alert.alert('Missing OTP', 'Please enter the OTP sent to your email.');
-      return;
-    }
-    if (!validatePassword(password)) {
-      Alert.alert('Weak Password', 'Password must be at least 6 characters.');
-      return;
-    }
-    if (password !== confirmPassword) {
-      Alert.alert('Password Mismatch', 'Passwords do not match.');
-      return;
-    }
-    setLoading(true);
-    try {
-      await verifyEmailOtp(email.trim().toLowerCase(), otp, password, confirmPassword);
-      Alert.alert('Success', 'Your account is verified and created successfully.');
-    } catch (error) {
-      Alert.alert('Verification Failed', error.response?.data?.message || 'Invalid or expired OTP.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (loading) return <LoadingSpinner message={otpStep ? 'Verifying OTP...' : 'Creating your account...'} />;
+  if (loading) return <LoadingSpinner message="Sending OTP..." />;
 
   return (
     <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
@@ -97,26 +71,11 @@ const RegisterScreen = ({ navigation }) => {
       {/* Form */}
       <Animated.View style={[styles.formPanel, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
         <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-          <Text style={styles.sectionLabel}>{otpStep ? 'EMAIL VERIFICATION' : 'PERSONAL DETAILS'}</Text>
+          <Text style={styles.sectionLabel}>PERSONAL DETAILS</Text>
 
-          {!otpStep ? (
-            <>
-              <CustomInput label="Full Name" value={name} onChangeText={setName} placeholder="Dr. / Mr. / Ms. Full Name" />
-              <CustomInput label="Email Address" value={email} onChangeText={setEmail} placeholder="you@example.com" keyboardType="email-address" />
-              <CustomButton title="Send OTP" onPress={handleRegister} style={styles.btn} />
-            </>
-          ) : (
-            <>
-              <CustomInput label="Email Address" value={email} onChangeText={setEmail} placeholder="you@example.com" keyboardType="email-address" editable={false} />
-              <CustomInput label="OTP" value={otp} onChangeText={(v) => setOtp(v.replace(/[^0-9]/g, ''))} placeholder="Enter 6-digit OTP" keyboardType="number-pad" />
-              <CustomInput label="Password" value={password} onChangeText={setPassword} placeholder="Create a strong password" secureTextEntry />
-              <CustomInput label="Confirm Password" value={confirmPassword} onChangeText={setConfirmPassword} placeholder="Re-enter your password" secureTextEntry />
-              <CustomButton title="Verify OTP & Create Account" onPress={handleVerifyOtp} style={styles.btn} />
-              <TouchableOpacity onPress={handleRegister} activeOpacity={0.7}>
-                <Text style={styles.loginLink}>Resend OTP</Text>
-              </TouchableOpacity>
-            </>
-          )}
+          <CustomInput label="Full Name" value={name} onChangeText={setName} placeholder="Dr. / Mr. / Ms. Full Name" />
+          <CustomInput label="Email Address" value={email} onChangeText={setEmail} placeholder="you@example.com" keyboardType="email-address" />
+          <CustomButton title="Send OTP" onPress={handleRegister} style={styles.btn} />
 
           <TouchableOpacity style={styles.loginRow} onPress={() => navigation.navigate('Login')} activeOpacity={0.7}>
             <Text style={styles.loginText}>Already have an account? </Text>

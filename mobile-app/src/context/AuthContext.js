@@ -1,7 +1,7 @@
 import React, { createContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from '../api/axios';
-import { verifyEmailOtpApi } from '../api/authApi';
+import { completeRegistrationApi, verifyEmailOtpApi } from '../api/authApi';
 
 export const AuthContext = createContext();
 
@@ -32,9 +32,18 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const verifyEmailOtp = async (email, otp, password, confirmPassword) => {
+  const verifyEmailOtp = async (email, otp) => {
     try {
-      const response = await verifyEmailOtpApi(email, otp, password, confirmPassword);
+      const response = await verifyEmailOtpApi(email, otp);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  };
+
+  const completeRegistration = async (email, password, confirmPassword) => {
+    try {
+      const response = await completeRegistrationApi(email, password, confirmPassword);
       const { token, ...user } = response.data;
       setUserToken(token);
       setUserInfo(user);
@@ -77,6 +86,7 @@ export const AuthProvider = ({ children }) => {
       login,
       register,
       verifyEmailOtp,
+      completeRegistration,
       logout,
       userToken,
       userInfo,

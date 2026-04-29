@@ -4,6 +4,7 @@ const {
   loginUser,
   getMe,
   verifyEmailOtp,
+  completeRegistration,
   requestPasswordResetOtp,
   verifyPasswordResetOtp,
   resetPasswordWithOtp,
@@ -14,6 +15,7 @@ const router = express.Router();
 
 router.post('/register', registerUser);
 router.post('/verify-email-otp', verifyEmailOtp);
+router.post('/complete-registration', completeRegistration);
 router.post('/login', loginUser);
 router.post('/forgot-password/request-otp', requestPasswordResetOtp);
 router.post('/forgot-password/verify-otp', verifyPasswordResetOtp);
