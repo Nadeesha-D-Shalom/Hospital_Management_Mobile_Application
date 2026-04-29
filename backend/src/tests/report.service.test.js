@@ -13,9 +13,16 @@ jest.mock('../models/doctor.model', () => ({
   find: jest.fn(),
 }));
 
+jest.mock('../models/complaint.model', () => ({
+  countDocuments: jest.fn(),
+  aggregate: jest.fn(),
+  find: jest.fn(),
+}));
+
 const Appointment = require('../models/appointment.model');
 const Payment = require('../models/payment.model');
 const Doctor = require('../models/doctor.model');
+const Complaint = require('../models/complaint.model');
 const { generateReportData } = require('../services/report.service');
 
 describe('report.service generateReportData', () => {
@@ -87,6 +94,39 @@ describe('report.service generateReportData', () => {
         appointmentCount: 1,
       },
     ]);
+  });
+
+  it('generates complaints report with status counts and recent solutions', async () => {
+    Complaint.countDocuments.mockResolvedValue(6);
+    Complaint.aggregate.mockResolvedValue([
+      { _id: 'open', count: 2 },
+      { _id: 'resolved', count: 3 },
+    ]);
+    Complaint.find.mockReturnValue({
+      populate: jest.fn().mockReturnThis(),
+      sort: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockReturnThis(),
+      select: jest.fn().mockResolvedValue([
+        {
+          subject: 'Billing issue',
+          adminReply: 'Refund processed',
+          userId: { name: 'Patient One', email: 'patient@example.com' },
+          updatedAt: new Date('2026-04-29T10:00:00Z'),
+        },
+      ]),
+    });
+
+    const result = await generateReportData('complaints');
+    expect(result.totalComplaints).toBe(6);
+    expect(result.openCount).toBe(2);
+    expect(result.inProgressCount).toBe(0);
+    expect(result.resolvedCount).toBe(3);
+    expect(result.recentResolved[0]).toMatchObject({
+      subject: 'Billing issue',
+      patientName: 'Patient One',
+      patientEmail: 'patient@example.com',
+      solution: 'Refund processed',
+    });
   });
 });
 

@@ -9,6 +9,7 @@ const titleFor = (reportType) => {
   if (reportType === 'appointments') return 'Appointment Report';
   if (reportType === 'revenue') return 'Revenue Report';
   if (reportType === 'doctor_performance') return 'Doctor Performance Report';
+  if (reportType === 'complaints') return 'Complaint Report';
   return 'Report';
 };
 

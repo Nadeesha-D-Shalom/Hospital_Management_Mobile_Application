@@ -1,6 +1,7 @@
 jest.mock('../models/appointment.model', () => ({
   findById: jest.fn(),
   findOne: jest.fn(),
+  find: jest.fn(),
   create: jest.fn(),
 }));
 
@@ -57,7 +58,15 @@ describe('appointment.controller createAppointment', () => {
   it('prevents double booking (409 when slot already booked)', async () => {
     Doctor.findById.mockResolvedValue({ _id: 'doc1', availabilityStatus: true });
     Service.findById.mockResolvedValue({ _id: 'srv1', availabilityStatus: true });
-    Appointment.findOne.mockResolvedValue({ _id: 'existing' });
+    Appointment.find.mockReturnValue({
+      populate: jest.fn().mockResolvedValue([
+        {
+          _id: 'existing',
+          appointmentTime: '10:00',
+          serviceId: { duration: 30 },
+        },
+      ]),
+    });
 
     const req = {
       user: { _id: 'user1' },
@@ -75,14 +84,16 @@ describe('appointment.controller createAppointment', () => {
     await createAppointment(req, res, next);
 
     expect(res.status).toHaveBeenCalledWith(409);
-    expect(res.json).toHaveBeenCalledWith({ message: 'Selected slot is already booked for this doctor' });
+    expect(res.json).toHaveBeenCalledWith({ message: 'Selected time overlaps with another appointment for this doctor' });
     expect(Appointment.create).not.toHaveBeenCalled();
   });
 
   it('creates appointment when slot is free', async () => {
     Doctor.findById.mockResolvedValue({ _id: 'doc1', availabilityStatus: true });
     Service.findById.mockResolvedValue({ _id: 'srv1', availabilityStatus: true });
-    Appointment.findOne.mockResolvedValue(null);
+    Appointment.find.mockReturnValue({
+      populate: jest.fn().mockResolvedValue([]),
+    });
     Appointment.create.mockResolvedValue({ _id: 'app1', userId: 'user1' });
 
     const req = {

@@ -13,7 +13,7 @@ import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 const ComplaintListScreen = ({ navigation, route }) => {
   const [complaints, setComplaints] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [adminReply, setAdminReply] = useState('');
+  const [replyById, setReplyById] = useState({});
   const [actionLoadingId, setActionLoadingId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
 
@@ -62,19 +62,26 @@ const ComplaintListScreen = ({ navigation, route }) => {
 
   // ---------------- STATUS UPDATE ----------------
   const handleStatusUpdate = async (id, nextStatus) => {
+    const solution = String(replyById[id] || '').trim();
+    if (nextStatus === 'resolved' && !solution) {
+      Alert.alert('Solution Required', 'Please add the solution before marking this complaint as resolved.');
+      return;
+    }
+
     setActionLoadingId(id);
     try {
-      await updateComplaintStatusApi(id, nextStatus, adminReply || undefined);
+      await updateComplaintStatusApi(id, nextStatus, solution || undefined);
 
       setComplaints((prev) =>
         prev.map((c) =>
-          c._id === id ? { ...c, status: nextStatus } : c
+          c._id === id ? { ...c, status: nextStatus, adminReply: solution || c.adminReply } : c
         )
       );
+      setReplyById((prev) => ({ ...prev, [id]: '' }));
 
       Alert.alert('Updated', `Marked as ${nextStatus}`);
     } catch (error) {
-      Alert.alert('Error', 'Update failed');
+      Alert.alert('Error', error.response?.data?.message || 'Update failed');
     } finally {
       setActionLoadingId(null);
     }
@@ -157,31 +164,62 @@ const ComplaintListScreen = ({ navigation, route }) => {
                 </View>
               ) : null}
 
-              {isAdmin && (
-                <View style={styles.adminActions}>
-                  <TouchableOpacity
-                    style={[styles.actionBtn, styles.progressBtn]}
-                    onPress={() => handleStatusUpdate(item._id, 'in_progress')}
-                  >
-                    <Text style={styles.actionBtnText}>In Progress</Text>
-                  </TouchableOpacity>
+              {isAdmin ? (
+                <View style={styles.adminPanel}>
+                  {item.status !== 'resolved' ? (
+                    <>
+                      <CustomInput
+                        label="Solution for patient"
+                        value={replyById[item._id] || ''}
+                        onChangeText={(value) => setReplyById((prev) => ({ ...prev, [item._id]: value }))}
+                        placeholder="Write the solution before resolving..."
+                        multiline
+                        numberOfLines={3}
+                      />
+                      <View style={styles.adminActions}>
+                        {item.status === 'open' ? (
+                          <TouchableOpacity
+                            style={[styles.actionBtn, styles.progressBtn]}
+                            disabled={actionLoadingId === item._id}
+                            onPress={() => handleStatusUpdate(item._id, 'in_progress')}
+                          >
+                            <Text style={styles.actionBtnText}>In Progress</Text>
+                          </TouchableOpacity>
+                        ) : null}
 
-                  <TouchableOpacity
-                    style={[styles.actionBtn, styles.resolvedBtn]}
-                    onPress={() => handleStatusUpdate(item._id, 'resolved')}
-                  >
-                    <Text style={styles.actionBtnText}>Resolved</Text>
-                  </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.actionBtn, styles.resolvedBtn]}
+                          disabled={actionLoadingId === item._id}
+                          onPress={() => handleStatusUpdate(item._id, 'resolved')}
+                        >
+                          <Text style={styles.actionBtnText}>Resolve</Text>
+                        </TouchableOpacity>
 
-                  <TouchableOpacity
-                    style={[styles.actionBtn, styles.deleteBtn]}
-                    disabled={deletingId === item._id}
-                    onPress={() => handleDelete(item._id)}
-                  >
-                    <Text style={styles.actionBtnText}>Delete</Text>
-                  </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.actionBtn, styles.deleteBtn]}
+                          disabled={deletingId === item._id}
+                          onPress={() => handleDelete(item._id)}
+                        >
+                          <Text style={styles.actionBtnText}>Delete</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </>
+                  ) : (
+                    <View style={styles.adminActions}>
+                      <View style={styles.lockedBadge}>
+                        <Text style={styles.lockedText}>Resolved</Text>
+                      </View>
+                      <TouchableOpacity
+                        style={[styles.actionBtn, styles.deleteBtn]}
+                        disabled={deletingId === item._id}
+                        onPress={() => handleDelete(item._id)}
+                      >
+                        <Text style={styles.actionBtnText}>Delete</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
                 </View>
-              )}
+              ) : null}
             </View>
           );
         }}
@@ -227,10 +265,16 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.danger,
   },
 
-  adminActions: {
-    flexDirection: 'row',
+  adminPanel: {
     marginHorizontal: 16,
     marginBottom: 10,
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.lg,
+    padding: 12,
+  },
+
+  adminActions: {
+    flexDirection: 'row',
     gap: 10,
   },
 
@@ -241,8 +285,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
-  progressBtn: { backgroundColor: 'orange' },
-  resolvedBtn: { backgroundColor: 'green' },
+  progressBtn: { backgroundColor: COLORS.warning },
+  resolvedBtn: { backgroundColor: COLORS.tealStrong },
+  lockedBadge: {
+    flex: 1,
+    padding: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+    backgroundColor: COLORS.tealFaint,
+  },
+  lockedText: {
+    color: COLORS.tealStrong,
+    fontWeight: FONTS.bold,
+  },
 
   actionBtnText: {
     color: '#fff',

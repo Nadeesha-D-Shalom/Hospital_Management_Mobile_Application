@@ -6,6 +6,7 @@ const {
   updateAppointment,
   deleteAppointment,
   updateAppointmentStatus,
+  getAppointmentAvailability,
 } = require('../controllers/appointment.controller');
 const authMiddleware = require('../middleware/auth.middleware');
 const roleMiddleware = require('../middleware/role.middleware');
@@ -14,6 +15,7 @@ const router = express.Router();
 
 router.use(authMiddleware);
 router.get('/', getAppointments);
+router.get('/availability', getAppointmentAvailability);
 router.post('/', createAppointment);
 router.get('/:id', getAppointmentById);
 router.put('/:id', updateAppointment);

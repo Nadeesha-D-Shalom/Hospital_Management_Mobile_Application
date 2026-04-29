@@ -61,6 +61,6 @@ exports.deleteDoctor = asyncHandler(async (req, res) => {
     return res.status(404).json({ message: 'Doctor not found' });
   }
 
-  await doctor.remove();
+  await doctor.deleteOne();
   res.status(200).json({ message: 'Doctor deleted successfully' });
 });

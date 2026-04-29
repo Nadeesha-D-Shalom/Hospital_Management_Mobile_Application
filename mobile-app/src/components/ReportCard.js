@@ -7,6 +7,7 @@ const typeIcon = (type) => {
     case 'appointments': return { label: 'APT', bg: COLORS.tealFaint, text: COLORS.tealStrong };
     case 'revenue': return { label: 'REV', bg: '#e6f7f0', text: COLORS.success };
     case 'doctor_performance': return { label: 'DOC', bg: '#fff7ed', text: COLORS.warning };
+    case 'complaints': return { label: 'CMP', bg: COLORS.dangerBg, text: COLORS.danger };
     default: return { label: 'RPT', bg: COLORS.bgMuted, text: COLORS.textMuted };
   }
 };

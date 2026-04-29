@@ -12,7 +12,7 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import { COLORS, FONTS, RADIUS, SHADOW } from '../../theme';
 
 const ProfileScreen = () => {
-  const { userInfo, logout } = useContext(AuthContext);
+  const { userInfo, logout, updateStoredUserInfo } = useContext(AuthContext);
   const [name,    setName]    = useState(userInfo?.name    || '');
   const [email,   setEmail]   = useState(userInfo?.email   || '');
   const [phone,   setPhone]   = useState(userInfo?.phone   || '');
@@ -21,13 +21,15 @@ const ProfileScreen = () => {
   const [deleteMode, setDeleteMode] = useState('password'); // password | otp
   const [deletePassword, setDeletePassword] = useState('');
   const [deleteOtp, setDeleteOtp] = useState('');
+  const [showDangerZone, setShowDangerZone] = useState(false);
 
   const initials = name ? name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() : '?';
 
   const handleUpdate = async () => {
     setLoading(true);
     try {
-      await updateUserApi(userInfo._id, { name, email, phone, address });
+      const res = await updateUserApi(userInfo._id, { name, email, phone, address });
+      await updateStoredUserInfo({ ...userInfo, ...res.data });
       Alert.alert('Profile Updated', 'Your information has been saved successfully.');
     } catch (error) {
       Alert.alert('Update Failed', error.response?.data?.message || 'Please try again.');
@@ -122,57 +124,69 @@ const ProfileScreen = () => {
 
         <CustomButton title="Save Changes" onPress={handleUpdate} style={styles.saveBtn} />
 
-        <Text style={styles.sectionLabel}>DELETE ACCOUNT</Text>
-        <View style={styles.deleteCard}>
-          <Text style={styles.deleteTitle}>Danger Zone</Text>
-          <Text style={styles.deleteSub}>
-            Delete your account using password, or use OTP if you forgot password.
-          </Text>
+        <TouchableOpacity
+          style={styles.showDangerBtn}
+          onPress={() => setShowDangerZone((prev) => !prev)}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.showDangerText}>{showDangerZone ? 'Hide Danger Zone' : 'Delete Account'}</Text>
+        </TouchableOpacity>
 
-          <View style={styles.toggleRow}>
-            <TouchableOpacity
-              style={[styles.toggleBtn, deleteMode === 'password' && styles.toggleBtnActive]}
-              onPress={() => setDeleteMode('password')}
-              activeOpacity={0.85}
-            >
-              <Text style={[styles.toggleText, deleteMode === 'password' && styles.toggleTextActive]}>Use Password</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.toggleBtn, deleteMode === 'otp' && styles.toggleBtnActive]}
-              onPress={() => setDeleteMode('otp')}
-              activeOpacity={0.85}
-            >
-              <Text style={[styles.toggleText, deleteMode === 'otp' && styles.toggleTextActive]}>Forgot Password (OTP)</Text>
-            </TouchableOpacity>
-          </View>
+        {showDangerZone ? (
+          <>
+            <Text style={styles.sectionLabel}>DANGER ZONE</Text>
+            <View style={styles.deleteCard}>
+              <Text style={styles.deleteTitle}>Delete Account</Text>
+              <Text style={styles.deleteSub}>
+                This action is permanent. Confirm with your password, or use OTP if you forgot it.
+              </Text>
 
-          {deleteMode === 'password' ? (
-            <CustomInput
-              label="Password"
-              value={deletePassword}
-              onChangeText={setDeletePassword}
-              placeholder="Enter your current password"
-              secureTextEntry
-            />
-          ) : (
-            <>
-              <CustomInput
-                label="OTP"
-                value={deleteOtp}
-                onChangeText={(v) => setDeleteOtp(v.replace(/[^0-9]/g, ''))}
-                placeholder="Enter 6-digit OTP"
-                keyboardType="number-pad"
-              />
-              <TouchableOpacity style={styles.otpBtn} onPress={handleSendDeleteOtp} activeOpacity={0.85}>
-                <Text style={styles.otpBtnText}>Send OTP to Email</Text>
+              <View style={styles.toggleRow}>
+                <TouchableOpacity
+                  style={[styles.toggleBtn, deleteMode === 'password' && styles.toggleBtnActive]}
+                  onPress={() => setDeleteMode('password')}
+                  activeOpacity={0.85}
+                >
+                  <Text style={[styles.toggleText, deleteMode === 'password' && styles.toggleTextActive]}>Use Password</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.toggleBtn, deleteMode === 'otp' && styles.toggleBtnActive]}
+                  onPress={() => setDeleteMode('otp')}
+                  activeOpacity={0.85}
+                >
+                  <Text style={[styles.toggleText, deleteMode === 'otp' && styles.toggleTextActive]}>Use OTP</Text>
+                </TouchableOpacity>
+              </View>
+
+              {deleteMode === 'password' ? (
+                <CustomInput
+                  label="Password"
+                  value={deletePassword}
+                  onChangeText={setDeletePassword}
+                  placeholder="Enter your current password"
+                  secureTextEntry
+                />
+              ) : (
+                <>
+                  <CustomInput
+                    label="OTP"
+                    value={deleteOtp}
+                    onChangeText={(v) => setDeleteOtp(v.replace(/[^0-9]/g, ''))}
+                    placeholder="Enter 6-digit OTP"
+                    keyboardType="number-pad"
+                  />
+                  <TouchableOpacity style={styles.otpBtn} onPress={handleSendDeleteOtp} activeOpacity={0.85}>
+                    <Text style={styles.otpBtnText}>Send OTP to Email</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+
+              <TouchableOpacity style={styles.deleteBtn} onPress={handleDeleteAccount} activeOpacity={0.85}>
+                <Text style={styles.deleteBtnText}>Delete My Account</Text>
               </TouchableOpacity>
-            </>
-          )}
-
-          <TouchableOpacity style={styles.deleteBtn} onPress={handleDeleteAccount} activeOpacity={0.85}>
-            <Text style={styles.deleteBtnText}>Delete My Account</Text>
-          </TouchableOpacity>
-        </View>
+            </View>
+          </>
+        ) : null}
 
         <TouchableOpacity style={styles.logoutBtn} onPress={logout} activeOpacity={0.8}>
           <Text style={styles.logoutText}>Sign Out</Text>
@@ -223,6 +237,16 @@ const styles = StyleSheet.create({
     padding: 16, marginBottom: 16, ...SHADOW.card,
   },
   saveBtn:    { marginBottom: 10 },
+  showDangerBtn: {
+    paddingVertical: 14,
+    borderRadius: RADIUS.md,
+    borderWidth: 1.5,
+    borderColor: COLORS.danger,
+    alignItems: 'center',
+    marginBottom: 18,
+    backgroundColor: COLORS.white,
+  },
+  showDangerText: { fontSize: 14, fontWeight: FONTS.bold, color: COLORS.danger },
   deleteCard: {
     backgroundColor: COLORS.white,
     borderRadius: RADIUS.lg,

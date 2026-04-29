@@ -9,6 +9,7 @@ const REPORT_TYPES = [
   { key: 'appointments', label: 'Appointment Report', sub: 'Booking stats & trends', color: COLORS.tealFaint, accent: COLORS.tealBright, emoji: '📅' },
   { key: 'revenue', label: 'Revenue Report', sub: 'Financial overview', color: '#e6f7f0', accent: COLORS.success, emoji: '💰' },
   { key: 'doctor_performance', label: 'Doctor Performance Report', sub: 'Specialist analytics', color: '#fff7ed', accent: COLORS.warning, emoji: '👨‍⚕️' },
+  { key: 'complaints', label: 'Complaint Report', sub: 'Open, in progress & resolved cases', color: COLORS.dangerBg, accent: COLORS.danger, emoji: 'CMP' },
 ];
 
 const ReportGenerateScreen = ({ navigation }) => {
@@ -21,7 +22,7 @@ const ReportGenerateScreen = ({ navigation }) => {
     try {
       await generateReportApi({ reportType: selected });
       Alert.alert('Report Generated', 'Your report has been successfully created.', [
-        { text: 'OK', onPress: () => navigation.goBack() },
+        { text: 'OK', onPress: () => navigation.navigate('Tabs', { screen: 'Reports' }) },
       ]);
     } catch (error) {
       Alert.alert('Failed', error.response?.data?.message || 'Report generation failed.');

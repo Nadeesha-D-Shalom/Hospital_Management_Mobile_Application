@@ -16,6 +16,43 @@ const getDayRangeUTC = (dateValue) => {
 
 const isValidTime = (t) => /^\d{2}:\d{2}$/.test(String(t));
 
+const timeToMinutes = (time) => {
+  const [hours, minutes] = String(time).split(':').map(Number);
+  return hours * 60 + minutes;
+};
+
+const rangesOverlap = (startA, durationA, startB, durationB) => {
+  const endA = startA + durationA;
+  const endB = startB + durationB;
+  return startA < endB && startB < endA;
+};
+
+const findOverlappingAppointment = async ({
+  doctorId,
+  appointmentDate,
+  appointmentTime,
+  duration,
+  excludeAppointmentId,
+}) => {
+  const { start, end } = getDayRangeUTC(appointmentDate);
+  const existingAppointments = await Appointment.find({
+    doctorId,
+    appointmentDate: { $gte: start, $lte: end },
+    status: { $nin: ['cancelled', 'rejected'] },
+    ...(excludeAppointmentId ? { _id: { $ne: excludeAppointmentId } } : {}),
+  }).populate('serviceId');
+
+  const requestedStart = timeToMinutes(appointmentTime);
+  return existingAppointments.find((existing) =>
+    rangesOverlap(
+      requestedStart,
+      Number(duration) || 30,
+      timeToMinutes(existing.appointmentTime),
+      Number(existing.serviceId?.duration) || 30
+    )
+  );
+};
+
 // ---------------- CREATE APPOINTMENT ----------------
 exports.createAppointment = asyncHandler(async (req, res) => {
   const {
@@ -47,16 +84,15 @@ exports.createAppointment = asyncHandler(async (req, res) => {
     return res.status(400).json({ message: 'Selected service is not available' });
   }
 
-  const { start, end } = getDayRangeUTC(appointmentDate);
-  const existingAppointment = await Appointment.findOne({
+  const existingAppointment = await findOverlappingAppointment({
     doctorId,
-    appointmentDate: { $gte: start, $lte: end },
+    appointmentDate,
     appointmentTime,
-    status: { $nin: ['cancelled', 'rejected'] },
+    duration: service.duration,
   });
 
   if (existingAppointment) {
-    return res.status(409).json({ message: 'Selected slot is already booked for this doctor' });
+    return res.status(409).json({ message: 'Selected time overlaps with another appointment for this doctor' });
   }
 
   const appointment = await Appointment.create({
@@ -96,6 +132,33 @@ exports.getAppointments = asyncHandler(async (req, res) => {
   }
 
   res.status(200).json(appointments);
+});
+
+exports.getAppointmentAvailability = asyncHandler(async (req, res) => {
+  const { doctorId, date } = req.query;
+
+  if (!doctorId || !date) {
+    return res.status(400).json({ message: 'doctorId and date are required' });
+  }
+
+  const { start, end } = getDayRangeUTC(date);
+  const appointments = await Appointment.find({
+    doctorId,
+    appointmentDate: { $gte: start, $lte: end },
+    status: { $in: ['pending', 'approved'] },
+  })
+    .populate('serviceId', 'serviceName duration')
+    .select('appointmentTime status serviceId');
+
+  res.status(200).json(
+    appointments.map((appointment) => ({
+      _id: appointment._id,
+      appointmentTime: appointment.appointmentTime,
+      status: appointment.status,
+      duration: Number(appointment.serviceId?.duration) || 30,
+      serviceName: appointment.serviceId?.serviceName || '',
+    }))
+  );
 });
 
 // ---------------- GET SINGLE APPOINTMENT ----------------
@@ -153,6 +216,25 @@ exports.updateAppointment = asyncHandler(async (req, res) => {
   if (appointmentTime !== undefined) appointment.appointmentTime = appointmentTime;
   if (notes !== undefined) appointment.notes = notes;
   if (paymentMethod !== undefined) appointment.paymentMethod = paymentMethod;
+
+  if (doctorId !== undefined || serviceId !== undefined || appointmentDate !== undefined || appointmentTime !== undefined) {
+    const serviceForDuration = await Service.findById(appointment.serviceId);
+    if (!serviceForDuration) {
+      return res.status(404).json({ message: 'Service not found' });
+    }
+
+    const overlapping = await findOverlappingAppointment({
+      doctorId: appointment.doctorId,
+      appointmentDate: appointment.appointmentDate,
+      appointmentTime: appointment.appointmentTime,
+      duration: serviceForDuration.duration,
+      excludeAppointmentId: appointment._id,
+    });
+
+    if (overlapping) {
+      return res.status(409).json({ message: 'Selected time overlaps with another appointment for this doctor' });
+    }
+  }
 
   await appointment.save();
 

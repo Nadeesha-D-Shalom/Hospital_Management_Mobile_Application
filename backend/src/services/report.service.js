@@ -1,10 +1,11 @@
 const Appointment = require('../models/appointment.model');
 const Payment = require('../models/payment.model');
 const Doctor = require('../models/doctor.model');
+const Complaint = require('../models/complaint.model');
 
 // Helper to count documents by status with a single query.
-const countByStatus = async (query, statusField, statuses) => {
-  const grouped = await Appointment.aggregate([
+const countByStatus = async (Model, query, statusField, statuses) => {
+  const grouped = await Model.aggregate([
     { $match: query },
     {
       $group: {
@@ -28,12 +29,36 @@ const countByStatus = async (query, statusField, statuses) => {
 const generateReportData = async (reportType) => {
   if (reportType === 'appointments') {
     const totalAppointments = await Appointment.countDocuments({});
-    const counts = await countByStatus({}, 'status', ['pending', 'approved', 'rejected']);
+    const counts = await countByStatus(Appointment, {}, 'status', ['pending', 'approved', 'rejected']);
     return {
       totalAppointments,
       approvedCount: counts.approved,
       pendingCount: counts.pending,
       rejectedCount: counts.rejected,
+    };
+  }
+
+  if (reportType === 'complaints') {
+    const totalComplaints = await Complaint.countDocuments({});
+    const counts = await countByStatus(Complaint, {}, 'status', ['open', 'in_progress', 'resolved']);
+    const recentResolved = await Complaint.find({ status: 'resolved' })
+      .populate('userId', 'name email')
+      .sort({ updatedAt: -1 })
+      .limit(10)
+      .select('subject adminReply userId updatedAt');
+
+    return {
+      totalComplaints,
+      openCount: counts.open,
+      inProgressCount: counts.in_progress,
+      resolvedCount: counts.resolved,
+      recentResolved: recentResolved.map((complaint) => ({
+        subject: complaint.subject,
+        patientName: complaint.userId?.name || 'Unknown',
+        patientEmail: complaint.userId?.email || '',
+        solution: complaint.adminReply || '',
+        resolvedAt: complaint.updatedAt,
+      })),
     };
   }
 

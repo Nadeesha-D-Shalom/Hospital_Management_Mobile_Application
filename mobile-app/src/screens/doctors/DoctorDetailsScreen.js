@@ -1,9 +1,37 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import React, { useContext } from 'react';
+import { Alert, View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import CustomButton from '../../components/CustomButton';
+import { AuthContext } from '../../context/AuthContext';
+import { deleteDoctorApi } from '../../api/doctorApi';
+import { COLORS, FONTS, RADIUS } from '../../theme';
 
 const DoctorDetailsScreen = ({ route, navigation }) => {
   const { doctor } = route.params;
+  const { userInfo } = useContext(AuthContext);
+  const isAdmin = userInfo?.role === 'admin';
+
+  const handleDelete = () => {
+    Alert.alert(
+      'Delete Doctor',
+      `Delete ${doctor?.name || 'this doctor'}? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteDoctorApi(doctor._id);
+              Alert.alert('Deleted', 'Doctor deleted successfully.');
+              navigation.goBack();
+            } catch (error) {
+              Alert.alert('Error', error.response?.data?.message || 'Delete failed');
+            }
+          },
+        },
+      ]
+    );
+  };
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -34,10 +62,21 @@ const DoctorDetailsScreen = ({ route, navigation }) => {
         </Text>
       </View>
 
-      <CustomButton
-        title="Book Appointment"
-        onPress={() => navigation.navigate('AppointmentBooking', { doctor })}
-      />
+      {isAdmin ? (
+        <View style={styles.adminActions}>
+          <TouchableOpacity style={[styles.adminBtn, styles.editBtn]} onPress={() => navigation.navigate('DoctorForm', { doctor })}>
+            <Text style={styles.adminBtnText}>Edit Doctor</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.adminBtn, styles.deleteBtn]} onPress={handleDelete}>
+            <Text style={styles.adminBtnText}>Delete Doctor</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <CustomButton
+          title="Book Appointment"
+          onPress={() => navigation.navigate('AppointmentBooking', { doctor })}
+        />
+      )}
     </ScrollView>
   );
 };
@@ -118,6 +157,16 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     color: '#334155',
   },
+  adminActions: { flexDirection: 'row', gap: 10 },
+  adminBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: RADIUS.md,
+    alignItems: 'center',
+  },
+  editBtn: { backgroundColor: COLORS.tealStrong },
+  deleteBtn: { backgroundColor: COLORS.danger },
+  adminBtnText: { color: COLORS.white, fontWeight: FONTS.bold, fontSize: 13 },
 });
 
 export default DoctorDetailsScreen;

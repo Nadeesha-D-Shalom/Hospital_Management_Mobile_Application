@@ -62,6 +62,11 @@ export const AuthProvider = ({ children }) => {
     await AsyncStorage.removeItem('userInfo');
   };
 
+  const updateStoredUserInfo = async (nextUserInfo) => {
+    setUserInfo(nextUserInfo);
+    await AsyncStorage.setItem('userInfo', JSON.stringify(nextUserInfo));
+  };
+
   const isLoggedIn = async () => {
     try {
       const token = await AsyncStorage.getItem('userToken');
@@ -87,6 +92,7 @@ export const AuthProvider = ({ children }) => {
       register,
       verifyEmailOtp,
       completeRegistration,
+      updateStoredUserInfo,
       logout,
       userToken,
       userInfo,

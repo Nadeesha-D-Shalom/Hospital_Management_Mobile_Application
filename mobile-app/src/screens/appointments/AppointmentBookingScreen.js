@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, Alert,
   TouchableOpacity, ScrollView,
 } from 'react-native';
-import { createAppointmentApi, updateAppointmentApi } from '../../api/appointmentApi';
+import { createAppointmentApi, getAppointmentAvailabilityApi, updateAppointmentApi } from '../../api/appointmentApi';
 import { getServicesApi } from '../../api/serviceApi';
 import { createReportApi, getReportsByAppointmentApi, updateReportApi } from '../../api/appointmentReportApi';
 import { uploadAppointmentReportFileApi } from '../../api/uploadApi';
@@ -63,14 +63,56 @@ const AppointmentBookingScreen = ({ route, navigation }) => {
   const [reportDescription, setReportDescription] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
   const [existingFileName, setExistingFileName] = useState('');
+  const [reservedSlots, setReservedSlots] = useState([]);
   const [loading, setLoading] = useState(false);
 
   const availableDates = getUpcomingDates(14);
-  const availableTimeSlots = [
-    '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
-    '12:00', '12:30', '13:00', '13:30', '14:00', '14:30',
-    '15:00', '15:30', '16:00', '16:30', '17:00', '17:30',
-  ];
+  const selectedService = services.find((service) => service._id === selectedServiceId);
+  const selectedDuration = Number(selectedService?.duration) || 30;
+
+  const timeToMinutes = (time) => {
+    const [hours, minutes] = String(time).split(':').map(Number);
+    return hours * 60 + minutes;
+  };
+
+  const minutesToTime = (minutes) => {
+    const hours = Math.floor(minutes / 60).toString().padStart(2, '0');
+    const mins = (minutes % 60).toString().padStart(2, '0');
+    return `${hours}:${mins}`;
+  };
+
+  const isPastSlot = (date, time) => {
+    const today = getTodayDate();
+    if (date !== today) return false;
+    const now = new Date();
+    return timeToMinutes(time) <= now.getHours() * 60 + now.getMinutes();
+  };
+
+  const slotsOverlap = (slotStart, slotDuration, bookedStart, bookedDuration) =>
+    slotStart < bookedStart + bookedDuration && bookedStart < slotStart + slotDuration;
+
+  const getSlotReservation = (slot) => {
+    const slotStart = timeToMinutes(slot);
+    const approved = reservedSlots.find((reserved) =>
+      reserved.status === 'approved' &&
+      slotsOverlap(slotStart, selectedDuration, timeToMinutes(reserved.appointmentTime), Number(reserved.duration) || 30)
+    );
+    if (approved) return approved;
+    return reservedSlots.find((reserved) =>
+      reserved.status === 'pending' &&
+      slotsOverlap(slotStart, selectedDuration, timeToMinutes(reserved.appointmentTime), Number(reserved.duration) || 30)
+    );
+  };
+
+  const availableTimeSlots = (() => {
+    const slots = [];
+    const start = 9 * 60;
+    const end = 18 * 60;
+    for (let current = start; current + selectedDuration <= end; current += selectedDuration) {
+      slots.push(minutesToTime(current));
+    }
+    return slots;
+  })();
 
   useEffect(() => {
     (async () => {
@@ -80,6 +122,20 @@ const AppointmentBookingScreen = ({ route, navigation }) => {
       } catch (e) { console.error(e); }
     })();
   }, []);
+
+  useEffect(() => {
+    if (!doctorData?._id || !appointmentDate) return;
+    (async () => {
+      try {
+        const res = await getAppointmentAvailabilityApi(doctorData._id, appointmentDate);
+        const slots = Array.isArray(res.data) ? res.data : [];
+        setReservedSlots(slots.filter((slot) => slot._id !== appointment?._id));
+      } catch (e) {
+        console.error(e);
+        setReservedSlots([]);
+      }
+    })();
+  }, [appointment?._id, appointmentDate, doctorData?._id]);
 
   useEffect(() => {
     if (!isEdit || !appointment?._id || appointment.status !== 'pending') return;
@@ -174,6 +230,14 @@ const AppointmentBookingScreen = ({ route, navigation }) => {
     if (!selectedServiceId || !appointmentDate || !appointmentTime) { Alert.alert('Error', 'Please fill all required fields'); return; }
     if (!isValidDate(appointmentDate)) { Alert.alert('Error', 'Date must be YYYY-MM-DD'); return; }
     if (!isValidTime(appointmentTime)) { Alert.alert('Error', 'Time must be HH:MM'); return; }
+    if (isPastSlot(appointmentDate, appointmentTime)) {
+      Alert.alert('Invalid Time', 'Please select an upcoming time slot.');
+      return;
+    }
+    if (getSlotReservation(appointmentTime)) {
+      Alert.alert('Slot Unavailable', 'Please select another time slot.');
+      return;
+    }
     if (addReport && (!reportType.trim() || !reportDescription.trim())) {
       Alert.alert('Missing Report Details', 'Please enter report type and details.');
       return;
@@ -291,17 +355,41 @@ const AppointmentBookingScreen = ({ route, navigation }) => {
         </View>
 
         <Text style={styles.sectionLabel}>SELECT TIME SLOT</Text>
+        <View style={styles.legendRow}>
+          <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: COLORS.tealStrong }]} /><Text style={styles.legendText}>Available</Text></View>
+          <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: COLORS.warning }]} /><Text style={styles.legendText}>Pending</Text></View>
+          <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: COLORS.danger }]} /><Text style={styles.legendText}>Approved</Text></View>
+        </View>
         <View style={styles.slotCard}>
           {availableTimeSlots.map((slot) => {
             const selected = slot === appointmentTime;
+            const reservation = getSlotReservation(slot);
+            const past = isPastSlot(appointmentDate, slot);
+            const disabled = Boolean(reservation) || past;
+            const approved = reservation?.status === 'approved';
+            const pending = reservation?.status === 'pending';
             return (
               <TouchableOpacity
                 key={slot}
-                style={[styles.slotItem, selected && styles.slotItemSelected]}
-                onPress={() => setAppointmentTime(slot)}
+                style={[
+                  styles.slotItem,
+                  selected && styles.slotItemSelected,
+                  pending && styles.slotItemPending,
+                  approved && styles.slotItemApproved,
+                  past && styles.slotItemPast,
+                ]}
+                onPress={() => {
+                  if (!disabled) setAppointmentTime(slot);
+                }}
+                disabled={disabled}
                 activeOpacity={0.8}
               >
-                <Text style={[styles.slotText, selected && styles.slotTextSelected]}>{slot}</Text>
+                <Text style={[
+                  styles.slotText,
+                  selected && styles.slotTextSelected,
+                  (pending || approved) && styles.slotTextBlocked,
+                  past && styles.slotTextPast,
+                ]}>{slot}</Text>
               </TouchableOpacity>
             );
           })}
@@ -490,8 +578,32 @@ const styles = StyleSheet.create({
   slotItemSelected: {
     backgroundColor: COLORS.tealStrong,
   },
+  slotItemPending: {
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: COLORS.warning,
+  },
+  slotItemApproved: {
+    backgroundColor: COLORS.dangerBg,
+    borderWidth: 1,
+    borderColor: COLORS.danger,
+  },
+  slotItemPast: {
+    opacity: 0.45,
+  },
   slotText: { color: COLORS.textPrimary, fontWeight: FONTS.medium },
   slotTextSelected: { color: COLORS.white },
+  slotTextBlocked: { color: COLORS.navyDeep },
+  slotTextPast: { color: COLORS.textMuted },
+  legendRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginLeft: 4,
+    marginBottom: 8,
+  },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  legendDot: { width: 8, height: 8, borderRadius: 4 },
+  legendText: { fontSize: 11, color: COLORS.textMuted, fontWeight: FONTS.medium },
 
   formCard: {
     backgroundColor: COLORS.white, borderRadius: RADIUS.lg,

@@ -27,6 +27,7 @@ import ComplaintListScreen     from '../screens/complaints/ComplaintListScreen';
 import ComplaintFormScreen     from '../screens/complaints/ComplaintFormScreen';
 import ReportListScreen        from '../screens/reports/ReportListScreen';
 import ReportGenerateScreen    from '../screens/reports/ReportGenerateScreen';
+import ReportDetailsScreen     from '../screens/reports/ReportDetailsScreen';
 import ProfileScreen           from '../screens/common/ProfileScreen';
 import AdminDashboardScreen    from '../screens/admin/AdminDashboardScreen';
 import { AuthContext }         from '../context/AuthContext';
@@ -420,6 +421,7 @@ export default function MainNavigator() {
       <Stack.Screen name="PaymentForm"         component={PaymentFormScreen} />
       <Stack.Screen name="ComplaintForm"       component={ComplaintFormScreen} />
       <Stack.Screen name="ReportGenerate"      component={ReportGenerateScreen} />
+      <Stack.Screen name="ReportDetails"       component={ReportDetailsScreen} />
     </Stack.Navigator>
   );
 }

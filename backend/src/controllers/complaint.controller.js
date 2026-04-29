@@ -103,10 +103,20 @@ exports.updateComplaintStatus = asyncHandler(async (req, res) => {
     return res.status(400).json({ message: 'Invalid status' });
   }
 
+  if (complaint.status === 'resolved') {
+    return res.status(403).json({ message: 'Resolved complaints cannot be changed again' });
+  }
+
+  const trimmedReply = String(adminReply || '').trim();
+
+  if (status === 'resolved' && !trimmedReply && !complaint.adminReply) {
+    return res.status(400).json({ message: 'Solution text is required to resolve a complaint' });
+  }
+
   complaint.status = status || complaint.status;
 
   if (adminReply !== undefined) {
-    complaint.adminReply = adminReply;
+    complaint.adminReply = trimmedReply;
   }
 
   await complaint.save();

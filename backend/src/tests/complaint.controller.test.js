@@ -60,5 +60,50 @@ describe('complaint.controller updateComplaintStatus', () => {
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith({ message: 'Invalid status' });
   });
+
+  it('requires solution text when resolving', async () => {
+    Complaint.findById.mockResolvedValue({
+      _id: 'c1',
+      userId: 'u1',
+      status: 'in_progress',
+      save: jest.fn(),
+    });
+
+    const req = {
+      user: { _id: 'admin1', role: 'admin' },
+      params: { id: 'c1' },
+      body: { status: 'resolved', adminReply: '' },
+    };
+    const res = createRes();
+    const next = jest.fn();
+
+    await updateComplaintStatus(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ message: 'Solution text is required to resolve a complaint' });
+  });
+
+  it('does not allow resolved complaints to change again', async () => {
+    Complaint.findById.mockResolvedValue({
+      _id: 'c1',
+      userId: 'u1',
+      status: 'resolved',
+      adminReply: 'Done',
+      save: jest.fn(),
+    });
+
+    const req = {
+      user: { _id: 'admin1', role: 'admin' },
+      params: { id: 'c1' },
+      body: { status: 'in_progress' },
+    };
+    const res = createRes();
+    const next = jest.fn();
+
+    await updateComplaintStatus(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith({ message: 'Resolved complaints cannot be changed again' });
+  });
 });
 

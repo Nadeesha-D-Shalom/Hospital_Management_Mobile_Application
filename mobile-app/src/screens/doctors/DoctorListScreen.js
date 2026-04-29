@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { View, FlatList, StyleSheet, Alert, TouchableOpacity, Text } from 'react-native';
-import { getDoctorsApi, updateDoctorApi } from '../../api/doctorApi';
+import { deleteDoctorApi, getDoctorsApi, updateDoctorApi } from '../../api/doctorApi';
 import DoctorCard from '../../components/DoctorCard';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import EmptyState from '../../components/EmptyState';
@@ -29,6 +29,32 @@ const DoctorListScreen = ({ navigation }) => {
     };
     fetchDoctors();
   }, []);
+
+  const handleDeleteDoctor = (doctor) => {
+    Alert.alert(
+      'Delete Doctor',
+      `Delete ${doctor.name}? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setActionLoadingId(doctor._id);
+              await deleteDoctorApi(doctor._id);
+              setDoctors((prev) => prev.filter((item) => item._id !== doctor._id));
+              Alert.alert('Deleted', 'Doctor deleted successfully.');
+            } catch (error) {
+              Alert.alert('Error', error.response?.data?.message || 'Delete failed');
+            } finally {
+              setActionLoadingId(null);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   if (loading) return <LoadingSpinner message="Loading doctors..." />;
 
@@ -69,7 +95,14 @@ const DoctorListScreen = ({ navigation }) => {
                   onPress={() => navigation.navigate('DoctorForm', { doctor: item })}
                   disabled={actionLoadingId !== null}
                 >
-                  <Text style={styles.editLinkText}>Edit profile</Text>
+                  <Text style={styles.editLinkText}>Edit</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.deleteLink}
+                  onPress={() => handleDeleteDoctor(item)}
+                  disabled={actionLoadingId !== null}
+                >
+                  <Text style={styles.deleteLinkText}>Delete</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[
@@ -130,6 +163,8 @@ const styles = StyleSheet.create({
   },
   editLink:     { paddingVertical: 4, paddingHorizontal: 2 },
   editLinkText: { fontSize: 12, color: COLORS.link, fontWeight: FONTS.semibold },
+  deleteLink: { paddingVertical: 4, paddingHorizontal: 2 },
+  deleteLinkText: { fontSize: 12, color: COLORS.danger, fontWeight: FONTS.semibold },
   togglePill:   { paddingHorizontal: 12, paddingVertical: 5, borderRadius: RADIUS.full },
   togglePillText:{ fontSize: 12, fontWeight: FONTS.bold },
 });
